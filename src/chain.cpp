@@ -841,7 +841,6 @@ int main(int argc, char* argv[])
   N=atoi(line.c_str());
   pr=new precinct[N+1];  
 
-
   
   cout << "We have "<<N<<" precincts."<<endl;
   //upper bound on crossing edges.
@@ -867,6 +866,51 @@ int main(int argc, char* argv[])
 
     sum+=pr[I].degree;
     I++;
+  }
+
+  // TODO(bojanserafimov): tidy up later
+  // TODO(bojanserafimov): test this.
+  // Replaces only the election results with information from another file.
+  // The election results file is a CSV with N rows and 3 columns.
+  // First column is the index, second and third are election results.
+  // The flip flag applies.
+  {
+    ifstream file_er(lineArgs.filename_election_results_arg);
+    if (!file_er.good()) {
+      cerr << "ERROR with election results file"<<endl;
+      exit(-1);
+    }
+    int I=0;
+    while (getline(file_er,line)){
+      if (I >= N) {
+        cerr << "ERROR: election results file is longer than it should be";
+        exit(-1);
+      }
+      vector<string> dataline;
+      Tokenize(line.c_str(), dataline, ", ", true);
+      if (dataline.size()!=3) {
+        cerr << "ERROR: shouldn't there be "<<3<<" chunks per line in election results file?"<<endl;
+        cerr << "there are "<<dataline.size()<<" at I="<<I<<endl;
+        exit(-1);
+      }
+      if (atoi(dataline[0].c_str())!=I){
+        cerr << "ERROR: line numbers don't match"<<endl;
+        cerr << dataline[0].c_str() << " " << I << endl;
+        exit(-1);
+      }
+      if (lineArgs.flip_flag) {
+        pr[I].voteA=atoi(dataline[2].c_str());
+        pr[I].voteB=atoi(dataline[1].c_str());
+      } else {
+        pr[I].voteA=atoi(dataline[1].c_str());
+        pr[I].voteB=atoi(dataline[2].c_str());
+      }
+      I++;
+    }
+    if (I != N) {
+      cerr << "ERROR: election results file is shorter than it should be";
+      exit(-1);
+    }
   }
  
   if (I<N || !myfile.eof() ){

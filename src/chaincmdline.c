@@ -41,6 +41,7 @@ const char *gengetopt_args_info_full_help[] = {
   "  -n, --steps=LONGLONG          do 2^n steps",
   "  -N, --numdists=INT            number of districts  (default=`18')",
   "  -f, --filename=filename       name of district file",
+  "      --filename_election_results=filename\n                                name of election results file",
   "  -d, --period=INT              2^d is period for output  (default=`22')",
   "  -V, --variance                report variance statistics  (default=off)",
   "  -M, --median_mean             report median/mean test statistics\n                                  (default=off)",
@@ -78,7 +79,7 @@ init_help_array(void)
   gengetopt_args_info_help[9] = gengetopt_args_info_full_help[9];
   gengetopt_args_info_help[10] = gengetopt_args_info_full_help[10];
   gengetopt_args_info_help[11] = gengetopt_args_info_full_help[11];
-  gengetopt_args_info_help[12] = gengetopt_args_info_full_help[13];
+  gengetopt_args_info_help[12] = gengetopt_args_info_full_help[12];
   gengetopt_args_info_help[13] = gengetopt_args_info_full_help[14];
   gengetopt_args_info_help[14] = gengetopt_args_info_full_help[15];
   gengetopt_args_info_help[15] = gengetopt_args_info_full_help[16];
@@ -91,11 +92,12 @@ init_help_array(void)
   gengetopt_args_info_help[22] = gengetopt_args_info_full_help[23];
   gengetopt_args_info_help[23] = gengetopt_args_info_full_help[24];
   gengetopt_args_info_help[24] = gengetopt_args_info_full_help[25];
-  gengetopt_args_info_help[25] = 0; 
+  gengetopt_args_info_help[25] = gengetopt_args_info_full_help[26];
+  gengetopt_args_info_help[26] = 0; 
   
 }
 
-const char *gengetopt_args_info_help[26];
+const char *gengetopt_args_info_help[27];
 
 typedef enum {ARG_NO
   , ARG_FLAG
@@ -129,6 +131,7 @@ void clear_given (struct gengetopt_args_info *args_info)
   args_info->steps_given = 0 ;
   args_info->numdists_given = 0 ;
   args_info->filename_given = 0 ;
+  args_info->filename_election_results_given = 0 ;
   args_info->period_given = 0 ;
   args_info->variance_given = 0 ;
   args_info->median_mean_given = 0 ;
@@ -159,6 +162,8 @@ void clear_args (struct gengetopt_args_info *args_info)
   args_info->numdists_orig = NULL;
   args_info->filename_arg = NULL;
   args_info->filename_orig = NULL;
+  args_info->filename_election_results_arg = NULL;
+  args_info->filename_election_results_orig = NULL;
   args_info->period_arg = 22;
   args_info->period_orig = NULL;
   args_info->variance_flag = 0;
@@ -199,27 +204,28 @@ void init_args_info(struct gengetopt_args_info *args_info)
   args_info->steps_help = gengetopt_args_info_full_help[4] ;
   args_info->numdists_help = gengetopt_args_info_full_help[5] ;
   args_info->filename_help = gengetopt_args_info_full_help[6] ;
-  args_info->period_help = gengetopt_args_info_full_help[7] ;
-  args_info->variance_help = gengetopt_args_info_full_help[8] ;
-  args_info->median_mean_help = gengetopt_args_info_full_help[9] ;
-  args_info->efficiency_gap_help = gengetopt_args_info_full_help[10] ;
-  args_info->seats_help = gengetopt_args_info_full_help[11] ;
-  args_info->histogram_help = gengetopt_args_info_full_help[12] ;
-  args_info->freeze_help = gengetopt_args_info_full_help[13] ;
+  args_info->filename_election_results_help = gengetopt_args_info_full_help[7] ;
+  args_info->period_help = gengetopt_args_info_full_help[8] ;
+  args_info->variance_help = gengetopt_args_info_full_help[9] ;
+  args_info->median_mean_help = gengetopt_args_info_full_help[10] ;
+  args_info->efficiency_gap_help = gengetopt_args_info_full_help[11] ;
+  args_info->seats_help = gengetopt_args_info_full_help[12] ;
+  args_info->histogram_help = gengetopt_args_info_full_help[13] ;
+  args_info->freeze_help = gengetopt_args_info_full_help[14] ;
   args_info->freeze_min = 0;
   args_info->freeze_max = 0;
-  args_info->counties_help = gengetopt_args_info_full_help[14] ;
-  args_info->poperror_help = gengetopt_args_info_full_help[15] ;
-  args_info->perimeter_help = gengetopt_args_info_full_help[16] ;
-  args_info->polsby_popper_help = gengetopt_args_info_full_help[17] ;
-  args_info->L1_compactness_help = gengetopt_args_info_full_help[18] ;
-  args_info->L2_compactness_help = gengetopt_args_info_full_help[19] ;
-  args_info->inputsvg_filename_help = gengetopt_args_info_full_help[20] ;
-  args_info->svg_filename_help = gengetopt_args_info_full_help[21] ;
-  args_info->precinct_filename_help = gengetopt_args_info_full_help[22] ;
-  args_info->svg_firstline_help = gengetopt_args_info_full_help[23] ;
-  args_info->stages_help = gengetopt_args_info_full_help[24] ;
-  args_info->flip_help = gengetopt_args_info_full_help[25] ;
+  args_info->counties_help = gengetopt_args_info_full_help[15] ;
+  args_info->poperror_help = gengetopt_args_info_full_help[16] ;
+  args_info->perimeter_help = gengetopt_args_info_full_help[17] ;
+  args_info->polsby_popper_help = gengetopt_args_info_full_help[18] ;
+  args_info->L1_compactness_help = gengetopt_args_info_full_help[19] ;
+  args_info->L2_compactness_help = gengetopt_args_info_full_help[20] ;
+  args_info->inputsvg_filename_help = gengetopt_args_info_full_help[21] ;
+  args_info->svg_filename_help = gengetopt_args_info_full_help[22] ;
+  args_info->precinct_filename_help = gengetopt_args_info_full_help[23] ;
+  args_info->svg_firstline_help = gengetopt_args_info_full_help[24] ;
+  args_info->stages_help = gengetopt_args_info_full_help[25] ;
+  args_info->flip_help = gengetopt_args_info_full_help[26] ;
   
 }
 
@@ -370,6 +376,8 @@ cmdline_parser_release (struct gengetopt_args_info *args_info)
   free_string_field (&(args_info->numdists_orig));
   free_string_field (&(args_info->filename_arg));
   free_string_field (&(args_info->filename_orig));
+  free_string_field (&(args_info->filename_election_results_arg));
+  free_string_field (&(args_info->filename_election_results_orig));
   free_string_field (&(args_info->period_orig));
   free_multiple_field (args_info->freeze_given, (void *)(args_info->freeze_arg), &(args_info->freeze_orig));
   args_info->freeze_arg = 0;
@@ -440,6 +448,8 @@ cmdline_parser_dump(FILE *outfile, struct gengetopt_args_info *args_info)
     write_into_file(outfile, "numdists", args_info->numdists_orig, 0);
   if (args_info->filename_given)
     write_into_file(outfile, "filename", args_info->filename_orig, 0);
+  if (args_info->filename_election_results_given)
+    write_into_file(outfile, "filename_election_results", args_info->filename_election_results_orig, 0);
   if (args_info->period_given)
     write_into_file(outfile, "period", args_info->period_orig, 0);
   if (args_info->variance_given)
@@ -719,6 +729,12 @@ cmdline_parser_required2 (struct gengetopt_args_info *args_info, const char *pro
   if (! args_info->filename_given)
     {
       fprintf (stderr, "%s: '--filename' ('-f') option required%s\n", prog_name, (additional_error ? additional_error : ""));
+      error_occurred = 1;
+    }
+  
+  if (! args_info->filename_election_results_given)
+    {
+      fprintf (stderr, "%s: '--filename_election_results' option required%s\n", prog_name, (additional_error ? additional_error : ""));
       error_occurred = 1;
     }
   
@@ -1070,6 +1086,7 @@ cmdline_parser_internal (
         { "steps",	1, NULL, 'n' },
         { "numdists",	1, NULL, 'N' },
         { "filename",	1, NULL, 'f' },
+        { "filename_election_results",	1, NULL, 0 },
         { "period",	1, NULL, 'd' },
         { "variance",	0, NULL, 'V' },
         { "median_mean",	0, NULL, 'M' },
@@ -1370,6 +1387,20 @@ cmdline_parser_internal (
               goto failure;
             cmdline_parser_free (&local_args_info);
             return 0;
+          
+          }
+          /* name of election results file.  */
+          else if (strcmp (long_options[option_index].name, "filename_election_results") == 0)
+          {
+          
+          
+            if (update_arg( (void *)&(args_info->filename_election_results_arg), 
+                 &(args_info->filename_election_results_orig), &(args_info->filename_election_results_given),
+                &(local_args_info.filename_election_results_given), optarg, 0, 0, ARG_STRING,
+                check_ambiguity, override, 0, 0,
+                "filename_election_results", '-',
+                additional_error))
+              goto failure;
           
           }
           
