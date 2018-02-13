@@ -56,6 +56,9 @@ struct gengetopt_args_info
   char * filename_election_results_arg;	/**< @brief name of election results file.  */
   char * filename_election_results_orig;	/**< @brief name of election results file original value given at command line.  */
   const char *filename_election_results_help; /**< @brief name of election results file help description.  */
+  char * filename_wes_units_arg;	/**< @brief used for CongD.  */
+  char * filename_wes_units_orig;	/**< @brief used for CongD original value given at command line.  */
+  const char *filename_wes_units_help; /**< @brief used for CongD help description.  */
   int period_arg;	/**< @brief 2^d is period for output (default='22').  */
   char * period_orig;	/**< @brief 2^d is period for output original value given at command line.  */
   const char *period_help; /**< @brief 2^d is period for output help description.  */
@@ -115,6 +118,7 @@ struct gengetopt_args_info
   unsigned int numdists_given ;	/**< @brief Whether numdists was given.  */
   unsigned int filename_given ;	/**< @brief Whether filename was given.  */
   unsigned int filename_election_results_given ;	/**< @brief Whether filename_election_results was given.  */
+  unsigned int filename_wes_units_given ;	/**< @brief Whether filename_wes_units was given.  */
   unsigned int period_given ;	/**< @brief Whether period was given.  */
   unsigned int variance_given ;	/**< @brief Whether variance was given.  */
   unsigned int median_mean_given ;	/**< @brief Whether median_mean was given.  */
