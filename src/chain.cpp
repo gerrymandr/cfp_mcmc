@@ -441,6 +441,22 @@ int reps(double * Ashare){
   return reps;
 }
 
+int get_bin_width_and_count(int steps, double minval, double maxval, double * bin_width) {
+  // https://stats.stackexchange.com/a/862
+  //  Naive IQR (interquartile range) as just 25% - 75% of total range
+  double rng = maxval - minval;
+  *bin_width = (2 * (0.75*rng - 0.25*rng) / pow(steps, 0.33333));
+  return rng / *bin_width;
+}
+
+double clip(double n, double lower, double upper) {
+  return std::max(lower, std::min(n, upper));
+}
+
+int attr_bin(double attr_value, double bin_width, int bins) {
+  return clip(floor(attr_value / bin_width), 0, bins);
+}
+
 double variance(double * Ashare)
 {
   double meansq=0;
@@ -665,6 +681,48 @@ void chainstep(precinct * pr, rdpile<edge> & edgeset, edge e, int * DvotesA, int
 }
 
 
+class HistogramPopulator{
+private:
+  double m_bin_width;
+  double m_minval;
+  double m_maxval;
+  int m_bins;
+  std::vector<int64_t> m_histogram;
+public:
+
+  HistogramPopulator(int64_t steps, double m_minval, double m_maxval) {
+    m_bins = get_bin_width_and_count(steps, m_minval, m_maxval, &m_bin_width);
+    m_histogram = std::vector<int64_t>(m_bins);
+  }
+
+  ~HistogramPopulator(){}
+
+  int bins() {
+    return m_bins;
+  }
+  double bin_width() {
+    return m_bin_width;
+  }
+  void add_value(double value, int64_t increment){
+    m_histogram[attr_bin(value, m_bin_width, m_bins)] += increment;
+  }
+  void save_file(std::string fname) {
+    ofstream myfile;
+    myfile.open(fname);
+    myfile << "# nbins, bin_start, bin_width\n";
+    myfile << m_bins << ", " << m_minval << ", "<< m_bin_width << "\n";
+    myfile << "# counts in each bin\n";
+
+    for (int j=0; j<=m_bins; j++){
+      myfile << m_histogram[j] << ", ";
+    }
+    myfile << "\n";
+    myfile.close();
+  }
+};
+
+
+
 int main(int argc, char* argv[])
 {
   gengetopt_args_info lineArgs;
@@ -785,8 +843,10 @@ int main(int argc, char* argv[])
 
   int64_t * reps_histogram;
   reps_histogram = new int64_t[g_NUMDISTRICTS+1];
-  for (int i=0; i<=g_NUMDISTRICTS; i++)
+
+  for (int i=0; i<=g_NUMDISTRICTS; i++) {
     reps_histogram[i]=0;
+  }
 
   int ** adjM;                                       //precinct adjacency matrix
   rdpile<edge> edgeset(MAXEDGES,MAXEDGES*MAXDEGREE);                    //set of edges on district boundaries
@@ -915,7 +975,10 @@ int main(int argc, char* argv[])
 
 
   mt19937_64 gen(314159265358979);
-  
+
+  HistogramPopulator median_mean_hist = HistogramPopulator(steps, 0.0, 0.1);
+  HistogramPopulator eg_hist = HistogramPopulator(steps, 0, 0.8);
+
   //filling in first step...
   int revisitations;
   {
@@ -1151,14 +1214,16 @@ int main(int argc, char* argv[])
       else
 	variance_lessunusual+=revisitations;
     }
+    double median_mean_val = median_mean(Ashare);
+    double eg_val = efficiency_gap(DvotesA,DvotesB);
     if (OutMedianMean){
-      if (median_mean(Ashare)>=initial_median_mean)
+      if (median_mean_val>=initial_median_mean)
 	median_mean_moreunusual+=revisitations;
       else
 	median_mean_lessunusual+=revisitations;
     }
     if (OutEfficiencyGap){
-      if (efficiency_gap(DvotesA,DvotesB)>=initial_efficiency_gap)
+      if (eg_val>=initial_efficiency_gap)
 	efficiency_gap_moreunusual+=revisitations;
       else
 	efficiency_gap_lessunusual+=revisitations;
@@ -1172,6 +1237,8 @@ int main(int argc, char* argv[])
     }
     if (OutHistogram){
       reps_histogram[reps(Ashare)]+=revisitations;
+      median_mean_hist.add_value(median_mean_val, revisitations);
+      eg_hist.add_value(eg_val, revisitations);
     }
 
     
@@ -1207,6 +1274,11 @@ int main(int argc, char* argv[])
 	    cout <<100*(double) reps_histogram[j]/(totalsteps)<<"%"<<endl;
 	  }
 	}
+
+  // TODO: here's where histograms get saved
+  median_mean_hist.save_file("median_mean_hist.txt");
+  eg_hist.save_file("eg_hist.txt");
+
 	cout << endl;
       }
       if (g_debuglevel>0){
