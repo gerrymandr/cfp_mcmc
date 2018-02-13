@@ -11,6 +11,7 @@
 #include "chaincmdline.h"
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
 
 //#define NDEBUG
 
@@ -874,7 +875,7 @@ int main(int argc, char* argv[])
   // The election results file is a CSV with N rows and 3 columns.
   // First column is the index, second and third are election results.
   // The flip flag applies.
-  if (false) {
+  if (true) {
     ifstream file_er(lineArgs.filename_election_results_arg);
     if (!file_er.good()) {
       cerr << "ERROR with election results file"<<endl;
@@ -910,6 +911,37 @@ int main(int argc, char* argv[])
     if (I != N) {
       cerr << "ERROR: election results file is shorter than it should be";
       exit(-1);
+    }
+  }
+
+  // read congD from filename_wes_units
+  {
+    ifstream file_wu(lineArgs.filename_wes_units_arg);
+    if (!file_wu.good()) {
+      cerr << "ERROR with wes units file"<<endl;
+      exit(-1);
+    }
+    getline(file_wu,line);  //skip data header
+    int I = 0;
+    while (getline(file_wu, line)) {
+      vector<string> dataline;
+      Tokenize(line.c_str(), dataline, ",", true);
+      if (dataline.size()!=2) {
+        cerr << "ERROR: shouldn't there be "<<2<<" chunks per line in b2wid?"<<endl;
+        cerr << "there are "<<dataline.size()<<" at I="<<I<<endl;
+        exit(-1);
+      }
+
+      for (int i = 0; i < dataline.size(); i++) {
+        if (dataline[i][0] == '\"') {
+          dataline[i] = dataline[i].substr(1, dataline[i].size() - 2);
+        }
+      }
+      int wid = atoi(dataline[0].c_str());
+      int district = atoi(dataline[1].c_str()) - 1;
+      pr[wid].original_district = district;
+      pr[wid].current_district = district;
+      I++;
     }
   }
  
