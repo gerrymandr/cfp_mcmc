@@ -8,7 +8,6 @@ option  "steps"	n   "do 2^n steps" longlong
 option "numdists" N "number of districts" int optional default="18"
 option "filename"  	 f   "name of district file" string typestr="string" typestr="filename" required
 option "filename_election_results" - "name of election results file" string typestr="string" typestr="filename" required
-option "filename_wes_units" - "used for CongD" string typestr="string" typestr="filename" required
 option "period" d "2^d is period for output" int default="22" optional
 option  "variance"   V   "report variance statistics"     flag off
 option  "median_mean" M "report median/mean test statistics" flag off
