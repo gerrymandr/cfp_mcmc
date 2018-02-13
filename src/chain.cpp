@@ -874,7 +874,7 @@ int main(int argc, char* argv[])
   // The election results file is a CSV with N rows and 3 columns.
   // First column is the index, second and third are election results.
   // The flip flag applies.
-  {
+  if (false) {
     ifstream file_er(lineArgs.filename_election_results_arg);
     if (!file_er.good()) {
       cerr << "ERROR with election results file"<<endl;
