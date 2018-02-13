@@ -441,6 +441,46 @@ int reps(double * Ashare){
   return reps;
 }
 
+double piecewise_reps(double * Ashare){
+  double reps=0;
+  for (int k=0; k<g_NUMDISTRICTS; k++){
+    if (Ashare[k]>=0.8) {
+      reps += Ashare[k];
+    }
+    else if (Ashare[k]>=0.65) {
+      reps += 8.0/3 * Ashare[k] - 4.0/3;
+    }
+    else if (Ashare[k]>=0.60) {
+      reps += 7 * Ashare[k] - 4.15;
+    }
+    else if (Ashare[k]>=0.50) {
+      reps += 0.5 * Ashare[k] - 0.25;
+    }
+    // implict 0 if x <0.5
+  }
+  return reps;
+}
+
+double smoothed_piecewise_reps(double * Ashare){
+  double reps=0;
+  for (int k=0; k<g_NUMDISTRICTS; k++){
+    if (Ashare[k]>=0.7) {
+      reps += 1;
+        }
+    else if (Ashare[k]>=0.55) {
+      reps += (5.0 / 3) * Ashare[k] - 1.0 / 6;
+    }
+    else if (Ashare[k]>=0.45) {
+      reps += 5 * Ashare[k] - 2;
+    }
+    else if (Ashare[k]>=0.3) {
+      reps += 5.0 / 3 * Ashare[k] - 0.5;
+        }
+    // implict 0 if x <0.3
+  }
+  return reps;
+}
+
 int get_bin_width_and_count(int steps, double minval, double maxval, double * bin_width) {
   // https://stats.stackexchange.com/a/862
   //  Naive IQR (interquartile range) as just 25% - 75% of total range
@@ -978,6 +1018,9 @@ int main(int argc, char* argv[])
 
   HistogramPopulator median_mean_hist = HistogramPopulator(steps, 0.0, 0.1);
   HistogramPopulator eg_hist = HistogramPopulator(steps, 0, 0.8);
+  HistogramPopulator pp_hist = HistogramPopulator(steps, 0, 0.8);
+  HistogramPopulator seats_hist = HistogramPopulator(steps, 0, g_NUMDISTRICTS);
+  HistogramPopulator smoothed_seats_hist = HistogramPopulator(steps, 0, g_NUMDISTRICTS);
 
   //filling in first step...
   int revisitations;
@@ -1028,6 +1071,8 @@ int main(int argc, char* argv[])
   double initial_median_mean=median_mean(Ashare);
   double initial_efficiency_gap=efficiency_gap(DvotesA,DvotesB);
   int initial_seat_count=reps(Ashare);
+  double initial_piecewise_seat_count=piecewise_reps(Ashare);
+  double initial_smoothed_seat_count=smoothed_piecewise_reps(Ashare);
   
 
 
@@ -1037,8 +1082,11 @@ int main(int argc, char* argv[])
     cout << "initial median_mean is "<<initial_median_mean<<endl;
   if (OutEfficiencyGap)
     cout << "initial efficiency_gap is "<<initial_efficiency_gap<<endl;
-  if (OutSeats)
+  if (OutSeats) {
     cout << "initial seat count is "<<initial_seat_count<<endl;
+    cout << "initial piecewise seat count is "<<initial_piecewise_seat_count<<endl;
+    cout << "initial smoothed seat count is "<<initial_smoothed_seat_count<<endl;
+  }
   
   
   //(filling in first step)
@@ -1214,31 +1262,51 @@ int main(int argc, char* argv[])
       else
 	variance_lessunusual+=revisitations;
     }
-    double median_mean_val = median_mean(Ashare);
-    double eg_val = efficiency_gap(DvotesA,DvotesB);
+    double median_mean_val;
+    double eg_val;
+    int seats;
+    double piecewise_seats;
+    double smoothed_seats;
+
     if (OutMedianMean){
+      median_mean_val = median_mean(Ashare);
       if (median_mean_val>=initial_median_mean)
 	median_mean_moreunusual+=revisitations;
       else
 	median_mean_lessunusual+=revisitations;
     }
+
     if (OutEfficiencyGap){
+      eg_val = efficiency_gap(DvotesA,DvotesB);
       if (eg_val>=initial_efficiency_gap)
 	efficiency_gap_moreunusual+=revisitations;
       else
 	efficiency_gap_lessunusual+=revisitations;
     }
-    if (OutSeats){
 
-      if (reps(Ashare)<=initial_seat_count)
+    if (OutSeats){
+      seats = reps(Ashare);
+      piecewise_seats = piecewise_reps(Ashare);
+      smoothed_seats = smoothed_piecewise_reps(Ashare);
+      if (seats<=initial_seat_count)
 	seat_count_moreunusual+=revisitations;
       else
 	seat_count_lessunusual+=revisitations;
     }
+
     if (OutHistogram){
       reps_histogram[reps(Ashare)]+=revisitations;
-      median_mean_hist.add_value(median_mean_val, revisitations);
-      eg_hist.add_value(eg_val, revisitations);
+
+      if (OutMedianMean)
+        median_mean_hist.add_value(median_mean_val, revisitations);
+
+      if (OutEfficiencyGap)
+        eg_hist.add_value(eg_val, revisitations);
+
+      if (OutSeats){
+        seats_hist.add_value(piecewise_seats, revisitations);
+        smoothed_seats_hist.add_value(smoothed_seats, revisitations);
+      }
     }
 
     
@@ -1276,8 +1344,16 @@ int main(int argc, char* argv[])
 	}
 
   // TODO: here's where histograms get saved
-  median_mean_hist.save_file("median_mean_hist.txt");
-  eg_hist.save_file("eg_hist.txt");
+  if (OutMedianMean)
+    median_mean_hist.save_file("median_mean_hist.txt");
+
+  if (OutEfficiencyGap)
+    eg_hist.save_file("eg_hist.txt");
+
+  if (OutSeats){
+    seats_hist.save_file("seats_hist.txt");
+    smoothed_seats_hist.save_file("smoothed_seats_hist.txt");
+  }
 
 	cout << endl;
       }
