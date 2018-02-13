@@ -1,41 +1,33 @@
 import sys
-import matplotlib
 import matplotlib.pyplot as plt
-import math
+import numpy as np
 
-def plot(filename, vline):
+
+def plot(xs, nums, width, vline):
+    plt.bar(xs, nums, width=width)
+    plt.axvline(vline, color='r')
+    plt.show()
+
+
+def load_hist_data(filename):
     with open(filename, 'r') as f:
-        line = f.readlines()[3]
-        nums = str.split(line, ', ')
+        lines = f.readlines()
+        nbins, start_val, bin_width = lines[1].split(', ')
+        nums = str.split(lines[3], ', ')
         nums = [int(x) for x in nums[:-1]]
-        imm = 0.062641
-        plt.plot(nums)
-        plt.axvline(x=vline, color='r')
-        plt.show()
-
-def clip(n, lower, upper):
-    return max(lower, min(n, upper))
-
-def attr_bin(attr_value, bin_width, bins):
-    return clip(math.floor(attr_value / bin_width), 0, bins)
-
-# args:
-# 1: file
-# 2: steps
-# 3: minval
-# 4: maxval
-# 5: red_line_loc
-steps = pow(2, float(sys.argv[2]))
-minval = float(sys.argv[3])
-maxval = float(sys.argv[4])
-rng = maxval - minval
-bin_width = (2 * (0.75*rng - 0.25*rng) / pow(steps, 0.33333)) # TODO 0.75*rng - 0.25*rng looks sus
-bins = rng // bin_width
+    return int(nbins), float(start_val), float(bin_width), nums
 
 
-bin_idx = attr_bin(float(sys.argv[5]), bin_width, bins)
-plot(sys.argv[1], bin_idx)
+def plot_from_file(filename, vline_location):
+    nbins, start_val, bin_width, nums = load_hist_data(filename)
+    xs = np.arange(nbins+1) * bin_width + start_val
+    plot(xs, nums, bin_width, float(vline_location))
 
-exit(0)
 
+if __name__ == '__main__':
+    # args:
+    # 1: file
+    # 2: red_line_loc
+    plot_from_file(sys.argv[1], sys.argv[2])
 
+    exit(0)
