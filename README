@@ -1,0 +1,36 @@
+chain v1.0
+
+This program runs the sqrt(ep) test for redistriciting Markov Chains on the Congressional Districtings of the Commonwealth of Pennsylvania.
+
+To install, type
+make
+
+then
+sudo make install
+
+
+
+The program requires as input the included file PAInputWithCounty.txt, which includes the graph and statistical data for the 9059 precincts.  Party affiliation in this file is taken from the 2010 Senate race between Sestak and Toomey.
+
+A simple run of the program is then
+chain -f PAInputWithCounty.txt -n 22 --variance --median_mean
+
+This runs the chain for 2^22 steps, with no constraints other than that districts are contiguous and simply connected, and with the default population difference threshold (2%).  It outputs outlier and significance with respect to the variance and median_mean metrics.
+
+Further options can be explored by running
+chain --help
+
+For example, to constrain the average inverse Polsby-Popper compactness at 160 and preserve counties not divided by the current districting, one would run:
+chain -f PAInputWithCounty.txt -n 22 --variance --median_mean --counties --L1-compactness 160
+
+
+Note that not all choices allowed by the program are equally reasonable.  For example, metrics based on the efficiency gap and seat count are insensitive to small changes when the number of districts is small (say, <50).
+
+The included file input.svg is used by the program when outputting svg files.
+
+This program accompanies the paper
+"Assessing significance in a Markov chain without mixing"
+by
+Maria Chikina, mchikina@pitt.edu
+Alan Frieze, alan@random.math.cmu.edu
+Wesley Pegden, wes@math.cmu.edu
