@@ -5,6 +5,7 @@ usage "chain -n steps -f filename"
 
 section "Main"
 option  "steps"	n   "do 2^n steps" longlong
+option  "target_time"	t   "stop after this many minutes" float optional
 option "numdists" N "number of districts" int optional default="18"
 option "filename"  	 f   "name of district file" string typestr="string" typestr="filename" required
 option "filename_election_results" - "name of election results file" string typestr="string" typestr="filename" optional

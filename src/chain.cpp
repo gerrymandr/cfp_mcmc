@@ -12,6 +12,7 @@
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
+#include <chrono>
 
 //#define NDEBUG
 
@@ -793,6 +794,10 @@ int main(int argc, char* argv[])
   bool L1Test=false;
   bool L2Test=false;
   bool PopperTest=false;
+
+  std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
+  float target_time_min=999999999;
+
   if (lineArgs.perimeter_given){
     PerimTest=true;
     perimthresh=lineArgs.perimeter_arg;
@@ -808,6 +813,9 @@ int main(int argc, char* argv[])
   if (lineArgs.L2_compactness_given){
     L2Test=true;     
     L2thresh=lineArgs.L2_compactness_arg;
+  }
+  if (lineArgs.target_time_given){
+    target_time_min = lineArgs.target_time_arg;
   }
   
 
@@ -1215,6 +1223,10 @@ int main(int argc, char* argv[])
 
   //MAIN LOOP
   for (int64_t i=0; i<steps; i++){
+    float time_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                               std::chrono::system_clock::now()- start_time).count() / 60.0;
+    if (time_elapsed > target_time_min) break;
+
     uniform_int_distribution<> intdist(0,edgeset.count-1);
     int rindex=intdist(gen);
     edge e=edgeset.access(rindex);    //we'll try adding vertex u(j) to u's district
