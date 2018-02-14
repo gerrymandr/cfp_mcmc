@@ -14,8 +14,8 @@ for plan in "${PLANS[@]}"; do
     for input in "${INPUTS[@]}"; do
         for result in "${RESULTS[@]}"; do
             [[ "$plan" == "CurrentRep.txt" ]] && l1_value=158 || l1_value=69
-            echo $plan $input $result
-            folder=$plan_$input_$result
+            folder="${plan}-${input}_${result}"
+            echo $data_root/$folder
             mkdir -p $data_root/$folder
             pushd $data_root/$folder
             ../chain -f $data_root/$plan -n 9999 -d 22 -1 $l1_value -M -p 0.1 --histogram --filename_wes_units $data_root/bill_plans/$result --filename_election_results $data_root/$input --target_time $target_time > out_err.log || echo "errored: $folder"
