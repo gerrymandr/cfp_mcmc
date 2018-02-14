@@ -101,7 +101,7 @@ init_help_array(void)
 
 }
 
-const char *gengetopt_args_info_help[28];
+const char *gengetopt_args_info_help[29];
 
 typedef enum {ARG_NO
   , ARG_FLAG
