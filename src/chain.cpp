@@ -1218,7 +1218,6 @@ int main(int argc, char* argv[])
       }
   }
 
- 
   int outputcount=0;
 
   //MAIN LOOP
@@ -1234,7 +1233,6 @@ int main(int argc, char* argv[])
     int v=pr[e.u].neighbors[e.j];
     int Dv=pr[v].current_district;
 
-    
     int Dusegmentcount=0;
     int Dvsegmentcount=0;
     int precinct=pr[v].neighbors[0];
@@ -1244,15 +1242,11 @@ int main(int argc, char* argv[])
     int lastincycle=pr[precinct].neighbors[pointback];
     int lastprecinct=lastincycle;
     int edgeindex=pr[precinct].self[pointback] ;
-    
-      
+
     int newprecinct=-1;
     int testcount=0;
 
-      
     while ( ! ( newprecinct==pr[v].neighbors[0] && pr[lastprecinct].self[edgeindex]==pointback )  ){
-      
-
 
       assert(precinct==pr[lastprecinct].neighbors[edgeindex]);
       testcount++;
@@ -1260,9 +1254,6 @@ int main(int argc, char* argv[])
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
 
-
-
-      
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
       else if (lastD==Dv && newD!=Dv)
@@ -1280,8 +1271,6 @@ int main(int argc, char* argv[])
       precinct=newprecinct;
     }
 
-
-      
     assert(Dusegmentcount>0);
     if (Dvsegmentcount==0){
       cerr << "u is " <<e.u<<" and v is " <<v << endl;
@@ -1293,7 +1282,6 @@ int main(int argc, char* argv[])
       continue;
     }
 
-    
     //END CONNECTIVITY CHECK
     chainstep(pr, edgeset, e, DvotesA, DvotesB, Ashare, Dpop, Dareas, Dperims);
 
@@ -1398,7 +1386,7 @@ int main(int argc, char* argv[])
     }
 
     
-    if (!(i%period) || i==steps-1){
+    if (!(i%period) || i==steps-1 || i==1E5){
       
       outputcount++;
       if (lineArgs.stages_flag){
@@ -1432,15 +1420,33 @@ int main(int argc, char* argv[])
 	}
 
   // TODO: here's where histograms get saved
-  if (OutMedianMean)
-    median_mean_hist.save_file("median_mean_hist.txt");
+  if (OutMedianMean){
+    if (i==1E5){
+      median_mean_hist.save_file("median_mean_hist_1E5.txt");
+    }
+    else {
+      median_mean_hist.save_file("median_mean_hist.txt");
+    }
+  }
 
-  if (OutEfficiencyGap)
-    eg_hist.save_file("eg_hist.txt");
+  if (OutEfficiencyGap) {
+    if (i==1E5){
+      eg_hist.save_file("eg_hist_1E5.txt");
+    }
+    else {
+      eg_hist.save_file("eg_hist.txt");
+    }
+  }
 
   if (OutSeats){
-    seats_hist.save_file("seats_hist.txt");
-    smoothed_seats_hist.save_file("smoothed_seats_hist.txt");
+    if (i==1E5){
+      seats_hist.save_file("seats_hist_1E5.txt");
+      smoothed_seats_hist.save_file("smoothed_seats_hist_1E5.txt");
+    }
+    else {
+      seats_hist.save_file("seats_hist.txt");
+      smoothed_seats_hist.save_file("smoothed_seats_hist.txt");
+    }
   }
 
 	cout << endl;
