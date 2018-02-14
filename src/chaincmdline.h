@@ -47,6 +47,9 @@ struct gengetopt_args_info
   #endif
   char * steps_orig;	/**< @brief do 2^n steps original value given at command line.  */
   const char *steps_help; /**< @brief do 2^n steps help description.  */
+  char * target_time_orig;
+  float target_time_arg;
+  const char *target_time_help; /**< @brief number of districts help description.  */
   int numdists_arg;	/**< @brief number of districts (default='18').  */
   char * numdists_orig;	/**< @brief number of districts original value given at command line.  */
   const char *numdists_help; /**< @brief number of districts help description.  */
@@ -115,6 +118,7 @@ struct gengetopt_args_info
   unsigned int full_help_given ;	/**< @brief Whether full-help was given.  */
   unsigned int version_given ;	/**< @brief Whether version was given.  */
   unsigned int steps_given ;	/**< @brief Whether steps was given.  */
+  unsigned int target_time_given ;	/**< @brief Whether steps was given.  */
   unsigned int numdists_given ;	/**< @brief Whether numdists was given.  */
   unsigned int filename_given ;	/**< @brief Whether filename was given.  */
   unsigned int filename_election_results_given ;	/**< @brief Whether filename_election_results was given.  */
