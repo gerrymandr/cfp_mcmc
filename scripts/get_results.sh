@@ -1,7 +1,8 @@
 #!/bin/bash
 
 set -e
-target_time=0.01
+# try for 4 hours
+target_time=240
 
 make
 
@@ -18,7 +19,11 @@ for plan in "${PLANS[@]}"; do
             echo $data_root/$folder
             mkdir -p $data_root/$folder
             pushd $data_root/$folder
-            ../chain -f $data_root/$plan -n 9999 -d 22 -1 $l1_value -M -p 0.1 --histogram --filename_wes_units $data_root/bill_plans/$result --filename_election_results $data_root/$input --target_time $target_time > out_err.log || echo "errored: $folder"
+            cp ../chain ./
+            ./chain -f $data_root/$plan -n 30 -1 $l1_value -M -p 0.1 -H -E -S \
+                    --filename_wes_units $data_root/bill_plans/$result \
+                    --filename_election_results $data_root/$input --target_time $target_time \
+                    &> out_err.log || echo "errored: $folder"
             popd
         done
     done
