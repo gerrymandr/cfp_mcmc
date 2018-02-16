@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from glob import glob
 import os
 import sys
@@ -7,21 +7,11 @@ import numpy as np
 import pandas as pd
 import re
 
+from plot import plot, get_x_bounds, load_hist_data
 
-def get_x_bounds(xs, nums):
-    nonzero_indices = np.argwhere(nums)
-    return xs[nonzero_indices[0, 0]], xs[nonzero_indices[-2, 0]]
-
-
-def plot(xs, nums, x_bounds, width, vline, line_color, fig=None):
-    if not fig:
-        fig = plt.figure()
-    plt.bar(xs, nums, width=width, color='#aaaaaa')
-    plt.plot(xs, nums, color='black')
-    plt.xlim(*x_bounds)
-    plt.ylim(0, 1.1 * nums[5:-5].max())
-    plt.axvline(vline, color=line_color)
-    return fig
+TITLES = {'CurrentRep': 'Current',
+          'NewRep': 'TS plan',
+          'GOV': 'Gov plan'}
 
 
 def generate_plot(dfs, initial_values, metric, race, district, subtract_1E5, out_folder):
@@ -33,35 +23,21 @@ def generate_plot(dfs, initial_values, metric, race, district, subtract_1E5, out
     width = values.index[1] - values.index[0]
 
     # inefficient to recompute this within the loop, but whatever.
-    x_bounds = []
-    for r, districts_dicts in dfs[metric].items():
-        # same race as our current one
-        if r[:3] == race[:3]:
-            for d, df in districts_dicts.items():
-                x_bounds.append(get_x_bounds(df.index.values, df[d].values))
-                # add in initial value as potential max bound (skip lower bound by making it absurd)
-                if d in initial_values[metric][r]:
-                    x_bounds.append((99999999, initial_values[metric][r][d]))
+    x_bounds = [get_x_bounds(values.index.values, values[district].values),
+                (99999999, initial_values[metric][race][district])]
     mins, maxes = zip(*x_bounds)
-    x_bounds = min(mins), max(maxes)
+    x_bounds = min(mins), 1.1 * max(maxes)
 
     line_color = 'red' if district.endswith('Rep') else 'purple'
 
     plot(values.index.values, values[district].values, x_bounds, width,
          initial_value, line_color, fig)
-    fn = '_'.join((metric, race, district)) + '_sub1E5' if subtract_1E5 else '' + '.png'
-    plt.title(''.join((race, district)))
+
+    sub15_string = '_sub1E5' if subtract_1E5 else ''
+    fn = '_'.join((metric, race, district)) + sub15_string + '.png'
+    plt.title(' - '.join((TITLES[district], race)))
     plt.savefig(os.path.join(out_folder, fn))
     plt.close()
-
-
-def load_hist_data(filename):
-    with open(filename, 'r') as f:
-        lines = f.readlines()
-        nbins, start_val, bin_width = lines[1].split(', ')
-        nums = str.split(lines[3], ', ')
-        nums = [int(x) for x in nums[:-1]]
-    return int(nbins), float(start_val), float(bin_width), nums
 
 
 def get_attribute_files(dirname, races, district_ids):
@@ -71,9 +47,9 @@ def get_attribute_files(dirname, races, district_ids):
     files = {'mm': defaultdict(dict),
              'eg': defaultdict(dict),
              'smoothed': defaultdict(dict)}
-    initial_values = {'mm': defaultdict(dict),
-                      'eg': defaultdict(dict),
-                      'smoothed': defaultdict(dict)}
+    initial_values = {'mm': defaultdict(OrderedDict),
+                      'eg': defaultdict(OrderedDict),
+                      'smoothed': defaultdict(OrderedDict)}
     for folder in folders:
         race, district_id = folder.split('-')
         race = os.path.basename(os.path.splitext(race)[0])
@@ -129,7 +105,7 @@ if __name__ == '__main__':
     # 1: dirname
     # 2: output folder (defaults to . if not provided)
     races = 'cong', 'sen', 'pres'
-    district_ids = 'CurrentRep', 'NewRep', 'Feb_11_Wes_units'
+    district_ids = 'CurrentRep', 'NewRep', 'GOV'
     out_folder = sys.argv[2] if len(sys.argv) > 2 else '.'
     if not os.path.isdir(out_folder):
         os.makedirs(out_folder)
