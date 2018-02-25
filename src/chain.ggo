@@ -29,3 +29,6 @@ option "precinct-filename" o "precinct filename" string typestr="string" default
 option "svg-firstline" l "first rgb line of input.svg" int default="20" optional
 option "stages" O "output files for intermediate stages" flag off
 option "flip" R "flip A/B party correspondence" flag off
+option "use_penalty_scoring" - "Only allow moves to plans with smaller penalty scores than the original plan" optional
+option "use_metropolis" - "Weight move probabilities using the Metropolis-Hastings algorithm" optional
+option "test" T "Just execute this file's testcases and then exit." optional
