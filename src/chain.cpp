@@ -11,6 +11,8 @@
 #include "chaincmdline.h"
 #include <queue>
 #include <unordered_map>
+#include <unordered_set>
+#include <chrono>
 
 //#define NDEBUG
 
@@ -23,7 +25,9 @@ int g_NUMDISTRICTS;  //number of districts in the state
 char g_debuglevel;   //debug output level
 ////////////////////////
 
-
+// Global testcase executor.  If someone wants to do refactoring to make this code nicer,
+// please do.  Crunched for time, so this is the quickest way to get tests in for now.
+bool runtests();
 
 struct edge{
   int u;
@@ -441,6 +445,233 @@ int reps(double * Ashare){
   return reps;
 }
 
+double piecewise_reps(double * Ashare){
+  double reps=0;
+  for (int k=0; k<g_NUMDISTRICTS; k++){
+    if (Ashare[k]>=0.8) {
+      reps += Ashare[k];
+    }
+    else if (Ashare[k]>=0.65) {
+      reps += 8.0/3 * Ashare[k] - 4.0/3;
+    }
+    else if (Ashare[k]>=0.60) {
+      reps += 7 * Ashare[k] - 4.15;
+    }
+    else if (Ashare[k]>=0.50) {
+      reps += 0.5 * Ashare[k] - 0.25;
+    }
+    // implict 0 if x <0.5
+  }
+  return reps;
+}
+
+double smoothed_piecewise_reps(double * Ashare){
+  double reps=0;
+  for (int k=0; k<g_NUMDISTRICTS; k++){
+    if (Ashare[k]>=0.7) {
+      reps += 1;
+        }
+    else if (Ashare[k]>=0.55) {
+      reps += (5.0 / 3) * Ashare[k] - 1.0 / 6;
+    }
+    else if (Ashare[k]>=0.45) {
+      reps += 5 * Ashare[k] - 2;
+    }
+    else if (Ashare[k]>=0.3) {
+      reps += 5.0 / 3 * Ashare[k] - 0.5;
+        }
+    // implict 0 if x <0.3
+  }
+  return reps;
+}
+
+class DistrictingPlanPenaltyScoreCalculator
+{
+public:
+  DistrictingPlanPenaltyScoreCalculator(
+      double splitWeight,
+      double compactnessWeight,
+      double populationDeviationWeight,
+      double totalPopulation,
+      const precinct *pr,
+      int nPrecincts,
+      int nDistricts) : m_splitWeight(splitWeight),
+                        m_compactnessWeight(compactnessWeight),
+                        m_populationDeviationWeight(populationDeviationWeight),
+                        m_totalPopulation(totalPopulation),
+                        m_nDistricts(nDistricts)
+  {
+    m_avgPopulationPerDistrict = static_cast<double>(totalPopulation) / m_nDistricts;
+
+    // Initialize county population numbers.
+    for (int i = 0; i < nPrecincts; ++i)
+    {
+      const auto &precinct = pr[i];
+      m_countyPopulationMap[precinct.county] += precinct.population;
+    }
+  };
+
+  double CalculateDistrictingPlanPenaltyScore(
+      const precinct *pr, // Array of nPrecincts precincts.
+      int nPrecincts,
+      const int *DperimPop, // Array of nDistricts district perimeter populations
+      const int *Dpop,      // Array of nDistricts district populations;
+      const std::vector<std::unordered_map<std::string, int>> &districtCountyPopulations);
+
+  double CalculateSplittingPenaltyScore(
+      const precinct *pr,
+      int nPrecincts,
+      const int *Dpop, // Array of nDistricts district populations;
+      const std::vector<std::unordered_map<std::string, int>> &districtCountyPopulations);
+
+  double CalculatePopulationDeviationPenaltyScore(const int *Dpop);
+
+  double CalculateDiscreteCompactnessPenaltyScore(
+      const int *DperimPop, // Array of nDistricts district perimeter populations
+      const int *Dpop       // Array of nDistricts district populations;
+  );
+
+  // Builds a DistrictCountyPopulationMatrix manually.  We only use this in testcases,
+  // since we iteratively maintain the DCP Matrix under normal operation.
+  std::vector<std::unordered_map<std::string, int>>
+  BuildDistrictCountyPopulationMatrix(const precinct *pr,
+                                      int nPrecincts,
+                                      const int *Dpop);
+
+private:
+  double m_splitWeight;
+  double m_compactnessWeight;
+  double m_populationDeviationWeight;
+  double m_avgPopulationPerDistrict;
+  int m_totalPopulation;
+  int m_nDistricts;
+  std::unordered_map<std::string, int> m_countyPopulationMap;
+};
+
+std::vector<std::unordered_map<std::string, int>>
+DistrictingPlanPenaltyScoreCalculator::BuildDistrictCountyPopulationMatrix(
+    const precinct *pr,
+    int nPrecincts,
+    const int *Dpop)
+{
+  // Build up some helper population data, namely
+  // A matrix storing the population of the portion of each county C in district D.
+  // Test purposes only -- building it up live is too slow.
+  std::vector<std::unordered_map<std::string, int>> districtCountyPopulations;
+  districtCountyPopulations.resize(m_nDistricts);
+  for (int i = 0; i < nPrecincts; ++i)
+  {
+    const auto &precinct = pr[i];
+    auto &dcpRowMap = districtCountyPopulations[precinct.current_district];
+    dcpRowMap[precinct.county] += precinct.population;
+  }
+  return districtCountyPopulations;
+}
+
+double DistrictingPlanPenaltyScoreCalculator::CalculateSplittingPenaltyScore(
+    const precinct *pr,
+    int nPrecincts,
+    const int *Dpop,
+    const std::vector<std::unordered_map<std::string, int>> &districtCountyPopulations)
+{
+  // Calculate splitting costs.
+
+  // Ent(C | D) = sum ( countyWeight * sqrt(countyDistrictWeight) )
+  // Ent(D | C) = sum ( districtWeight * sqrt(districtCountyWeight) )
+  double ent_c_given_d = 0;
+  double ent_d_given_c = 0;
+  for (int i = 0; i < m_nDistricts; ++i)
+  {
+    auto &dcpRowMap = districtCountyPopulations[i];
+    for (const auto &dcpEntry : dcpRowMap)
+    {
+      const auto &county = dcpEntry.first;
+      double districtCountyPopulation = static_cast<double>(dcpEntry.second);
+      double districtWeight = static_cast<double>(Dpop[i]) / m_totalPopulation;
+      double districtCountyWeight = districtCountyPopulation / Dpop[i];
+      if (Dpop[i] == 0)
+      {
+        std::cout << "Something has gone horribly wrong.  District " << i << "has population 0" << std::endl;
+        exit(-1);
+      }
+      double countyWeight = static_cast<double>(m_countyPopulationMap[county]) / m_totalPopulation;
+      double countyDistrictWeight = districtCountyPopulation / m_countyPopulationMap[county];
+
+      ent_c_given_d += (districtWeight * sqrt(districtCountyWeight));
+      ent_d_given_c += (countyWeight * sqrt(countyDistrictWeight));
+    }
+  }
+
+  double splittingCost = ent_c_given_d + ent_d_given_c;
+  splittingCost *= m_splitWeight;
+  return splittingCost;
+}
+
+double DistrictingPlanPenaltyScoreCalculator::CalculatePopulationDeviationPenaltyScore(
+    const int *Dpop)
+{
+  std::vector<double> fractionalDistrictPopulations;
+  for (int i = 0; i < m_nDistricts; ++i)
+  {
+    const auto &districtPopulation = Dpop[i];
+    fractionalDistrictPopulations.push_back(
+        (districtPopulation - m_avgPopulationPerDistrict) / districtPopulation);
+  }
+  double populationDeviationCost = arrayL2(&fractionalDistrictPopulations[0], m_nDistricts);
+  populationDeviationCost *= m_populationDeviationWeight;
+
+  return populationDeviationCost;
+}
+
+double DistrictingPlanPenaltyScoreCalculator::CalculateDiscreteCompactnessPenaltyScore(
+    const int *DperimPop,
+    const int *Dpop)
+{
+  double compactnessCost = 0;
+  for (int i = 0; i < m_nDistricts; ++i)
+  {
+    //std::cout << "District: " << i << " DPerimPop: " << DperimPop[i] << " Dpop: " << Dpop[i] << std::endl;
+    // C = Perim^2/total, but we need to split it into Perim * (Perim/total) to avoid overflow.
+    double compactnessRatio = (static_cast<double>(DperimPop[i]) / Dpop[i]);
+    compactnessCost += DperimPop[i] * compactnessRatio;
+  }
+  compactnessCost *= m_compactnessWeight;
+  return compactnessCost;
+}
+
+double DistrictingPlanPenaltyScoreCalculator::CalculateDistrictingPlanPenaltyScore(
+    const precinct *pr,
+    int nPrecincts,
+    const int *DperimPop,
+    const int *Dpop,
+    const std::vector<std::unordered_map<std::string, int>> &districtCountyPopulations)
+{
+  double splittingCost = this->CalculateSplittingPenaltyScore(pr, nPrecincts, Dpop, districtCountyPopulations);
+  double populationDeviationCost = this->CalculatePopulationDeviationPenaltyScore(Dpop);
+  double compactnessCost = this->CalculateDiscreteCompactnessPenaltyScore(DperimPop, Dpop);
+
+  // std::cout << "split: " << splittingCost << " popdev: " << populationDeviationCost << "compactness: " << compactnessCost << std::endl;
+
+  // Total Cost = split + compact + popdev.
+  return populationDeviationCost + splittingCost + compactnessCost;
+}
+
+int get_bin_width_and_count(int steps, double minval, double maxval, double * bin_width) {
+  // https://stats.stackexchange.com/a/862
+  //  Naive IQR (interquartile range) as just 25% - 75% of total range
+  double rng = maxval - minval;
+  *bin_width = (2 * (0.75*rng - 0.25*rng) / pow(steps, 0.33333));
+  return rng / *bin_width;
+}
+
+double clip(double n, double lower, double upper) {
+  return std::max(lower, std::min(n, upper));
+}
+
+int attr_bin(double attr_value, double bin_width, int bins) {
+  return clip(floor(attr_value / bin_width), 0, bins);
+}
+
 double variance(double * Ashare)
 {
   double meansq=0;
@@ -606,63 +837,127 @@ void tofile(char* filename, precinct* pr, int N, bool use_counties)
 
 
 
-void chainstep(precinct * pr, rdpile<edge> & edgeset, edge e, int * DvotesA, int * DvotesB, double * Ashare, int * Dpop, double * Dareas, double * Dperims){  //add e.u(e.j) to district of e.u
-  int Du=pr[e.u].current_district;
-  int v=pr[e.u].neighbors[e.j];
-  int Dv=pr[v].current_district;
-  if (Du==Dv){
-    cout <<"WTF! Du is "<<Du<<" and Dv is "<<Dv<<endl;
+void chainstep(precinct *pr, rdpile<edge> &edgeset, edge e, int *DvotesA, int *DvotesB,
+               double *Ashare, int *Dpop, double *Dareas, double *Dperims, int *DperimPop, bool use_counties,
+               std::vector<std::unordered_map<std::string, int>> &districtCountyPopulations)
+{ //add e.u(e.j) to district of e.u
+  int Du = pr[e.u].current_district;
+  int v = pr[e.u].neighbors[e.j];
+  int Dv = pr[v].current_district;
+
+  if (Du == Dv)
+  {
+    cout << "WTF! Du is " << Du << " and Dv is " << Dv << endl;
     exit(-1);
   }
-  assert (Dv>=0); //not adding outside
-  assert (Du!=Dv); 
+  assert(Dv >= 0); //not adding outside
+  assert(Du != Dv);
 
-  DvotesA[Du]+= pr[v].voteA;
-  DvotesA[Dv]-= pr[v].voteA;
-  DvotesB[Du]+= pr[v].voteB;
-  DvotesB[Dv]-= pr[v].voteB;
-  Ashare[Du]=((double) DvotesA[Du])/(DvotesA[Du]+DvotesB[Du]);
-  Ashare[Dv]=((double) DvotesA[Dv])/(DvotesA[Dv]+DvotesB[Dv]);
+  DvotesA[Du] += pr[v].voteA;
+  DvotesA[Dv] -= pr[v].voteA;
+  DvotesB[Du] += pr[v].voteB;
+  DvotesB[Dv] -= pr[v].voteB;
+  Ashare[Du] = ((double)DvotesA[Du]) / (DvotesA[Du] + DvotesB[Du]);
+  Ashare[Dv] = ((double)DvotesA[Dv]) / (DvotesA[Dv] + DvotesB[Dv]);
 
-  Dpop[Du]+= pr[v].population;
-  Dpop[Dv]-= pr[v].population;
+  Dpop[Du] += pr[v].population;
+  Dpop[Dv] -= pr[v].population;
 
-  Dareas[Du]+= pr[v].area;
-  Dareas[Dv]-= pr[v].area;
+  Dareas[Du] += pr[v].area;
+  Dareas[Dv] -= pr[v].area;
 
-  for (int l=0; l<pr[v].degree; l++){
+  if (use_counties)
+  {
+    districtCountyPopulations[Du][pr[v].county] += pr[v].population;
+    districtCountyPopulations[Dv][pr[v].county] -= pr[v].population;
+  }
 
-    if (pr[v].neighbors[l]<0){  //outside
-      Dperims[Du]+=pr[v].shared_perimeters[l]; //because it avoids Du
-      Dperims[Dv]-=pr[v].shared_perimeters[l]; //because it avoids Dv
-
-
+  for (int l = 0; l < pr[v].degree; l++)
+  {
+    if (pr[v].neighbors[l] < 0)
+    {                                            //outside
+      Dperims[Du] += pr[v].shared_perimeters[l]; //because it avoids Du
+      DperimPop[Du] += pr[v].population;
+      Dperims[Dv] -= pr[v].shared_perimeters[l]; //because it avoids Dv
+      DperimPop[Dv] -= pr[v].population;
     }
-    else if (pr[pr[v].neighbors[l]].current_district==Du){
-      if (!pr[pr[v].neighbors[l]].frozen){
-	edgeset.remove(edge(v,l));
-	edgeset.remove(edge(pr[v].neighbors[l],pr[v].self[l]));
+    else if (pr[pr[v].neighbors[l]].current_district == Du)
+    {
+      if (!pr[pr[v].neighbors[l]].frozen)
+      {
+        edgeset.remove(edge(v, l));
+        edgeset.remove(edge(pr[v].neighbors[l], pr[v].self[l]));
       }
-      Dperims[Du]-=pr[v].shared_perimeters[l]; //because it intersects Du
-      Dperims[Dv]-=pr[v].shared_perimeters[l]; //because it avoids Dv
+      Dperims[Du] -= pr[v].shared_perimeters[l]; //because it intersects Du
+      DperimPop[Du] -= pr[v].population;
+      Dperims[Dv] -= pr[v].shared_perimeters[l]; //because it avoids Dv
+      DperimPop[Dv] -= pr[v].population;
     }
-    else if (pr[pr[v].neighbors[l]].current_district==Dv){
-      if (!pr[pr[v].neighbors[l]].frozen){
-	edgeset.insert(edge(v,l));
-	edgeset.insert(edge(pr[v].neighbors[l],pr[v].self[l]));
+    else if (pr[pr[v].neighbors[l]].current_district == Dv)
+    {
+      if (!pr[pr[v].neighbors[l]].frozen)
+      {
+        edgeset.insert(edge(v, l));
+        edgeset.insert(edge(pr[v].neighbors[l], pr[v].self[l]));
       }
-      Dperims[Du]+=pr[v].shared_perimeters[l]; //because it avoids Du
-      Dperims[Dv]+=pr[v].shared_perimeters[l]; //because it intersects Dv
+      Dperims[Du] += pr[v].shared_perimeters[l]; //because it avoids Du
+      DperimPop[Du] += pr[v].population;
+      Dperims[Dv] += pr[v].shared_perimeters[l]; //because it intersects Dv
+      DperimPop[Dv] += pr[v].population;
     }
-    else{ //avoids Du AND Dv
-      Dperims[Du]+=pr[v].shared_perimeters[l]; //because it avoids Du
-      Dperims[Dv]-=pr[v].shared_perimeters[l]; //because it avoids Dv
+    else
+    {                                            //avoids Du AND Dv
+      Dperims[Du] += pr[v].shared_perimeters[l]; //because it avoids Du
+      DperimPop[Du] += pr[v].population;
+      Dperims[Dv] -= pr[v].shared_perimeters[l]; //because it avoids Dv
+      DperimPop[Dv] -= pr[v].population;
     }
   }
 
-  pr[v].current_district=Du;
-
+  pr[v].current_district = Du;
 }
+
+
+class HistogramPopulator{
+private:
+  double m_bin_width;
+  double m_minval;
+  double m_maxval;
+  int m_bins;
+  std::vector<int64_t> m_histogram;
+public:
+
+  HistogramPopulator(int64_t steps, double m_minval, double m_maxval) {
+    m_bins = get_bin_width_and_count(steps, m_minval, m_maxval, &m_bin_width);
+    m_histogram = std::vector<int64_t>(m_bins);
+  }
+
+  ~HistogramPopulator(){}
+
+  int bins() {
+    return m_bins;
+  }
+  double bin_width() {
+    return m_bin_width;
+  }
+  void add_value(double value, int64_t increment){
+    m_histogram[attr_bin(value, m_bin_width, m_bins)] += increment;
+  }
+  void save_file(std::string fname) {
+    ofstream myfile;
+    myfile.open(fname);
+    myfile << "# nbins, bin_start, bin_width\n";
+    myfile << m_bins << ", " << m_minval << ", "<< m_bin_width << "\n";
+    myfile << "# counts in each bin\n";
+
+    for (int j=0; j<=m_bins; j++){
+      myfile << m_histogram[j] << ", ";
+    }
+    myfile << "\n";
+    myfile.close();
+  }
+};
+
 
 
 int main(int argc, char* argv[])
@@ -670,6 +965,12 @@ int main(int argc, char* argv[])
   gengetopt_args_info lineArgs;
   if (cmdline_parser(argc, argv, &lineArgs)) {
     cmdline_parser_print_help();
+    return 1;
+  }
+
+  if (lineArgs.test_given)
+  {
+    runtests();
     return 1;
   }
 
@@ -694,6 +995,12 @@ int main(int argc, char* argv[])
   bool L1Test=false;
   bool L2Test=false;
   bool PopperTest=false;
+  bool penaltyScoreTest = false;
+  bool metropolisHastingsTest = false;
+
+  std::chrono::time_point<std::chrono::system_clock> start_time = std::chrono::system_clock::now();
+  float target_time_min=999999999;
+
   if (lineArgs.perimeter_given){
     PerimTest=true;
     perimthresh=lineArgs.perimeter_arg;
@@ -710,7 +1017,15 @@ int main(int argc, char* argv[])
     L2Test=true;     
     L2thresh=lineArgs.L2_compactness_arg;
   }
-  
+  if (lineArgs.target_time_given){
+    target_time_min = lineArgs.target_time_arg;
+  }
+  if (lineArgs.use_penalty_scoring_given) {
+    penaltyScoreTest = true;
+  }
+  if (lineArgs.use_metropolis_given) {
+    metropolisHastingsTest = true;
+  }
 
   g_debuglevel=0;
 
@@ -743,7 +1058,6 @@ int main(int argc, char* argv[])
   N=atoi(line.c_str());
   pr=new precinct[N+1];  
 
-
   
   cout << "We have "<<N<<" precincts."<<endl;
   //upper bound on crossing edges.
@@ -770,6 +1084,82 @@ int main(int argc, char* argv[])
     sum+=pr[I].degree;
     I++;
   }
+
+  // TODO(bojanserafimov): tidy up later
+  // TODO(bojanserafimov): test this.
+  // Replaces only the election results with information from another file.
+  // The election results file is a CSV with N rows and 3 columns.
+  // First column is the index, second and third are election results.
+  // The flip flag applies.
+  if (lineArgs.filename_election_results_given) {
+    ifstream file_er(lineArgs.filename_election_results_arg);
+    if (!file_er.good()) {
+      cerr << "ERROR with election results file"<<endl;
+      exit(-1);
+    }
+    int I=0;
+    while (getline(file_er,line)){
+      if (I >= N) {
+        cerr << "ERROR: election results file is longer than it should be";
+        exit(-1);
+      }
+      vector<string> dataline;
+      Tokenize(line.c_str(), dataline, ", ", true);
+      if (dataline.size()!=3) {
+        cerr << "ERROR: shouldn't there be "<<3<<" chunks per line in election results file?"<<endl;
+        cerr << "there are "<<dataline.size()<<" at I="<<I<<endl;
+        exit(-1);
+      }
+      if (atoi(dataline[0].c_str())!=I){
+        cerr << "ERROR: line numbers don't match"<<endl;
+        cerr << dataline[0].c_str() << " " << I << endl;
+        exit(-1);
+      }
+      if (lineArgs.flip_flag) {
+        pr[I].voteA=atoi(dataline[2].c_str());
+        pr[I].voteB=atoi(dataline[1].c_str());
+      } else {
+        pr[I].voteA=atoi(dataline[1].c_str());
+        pr[I].voteB=atoi(dataline[2].c_str());
+      }
+      I++;
+    }
+    if (I != N) {
+      cerr << "ERROR: election results file is shorter than it should be";
+      exit(-1);
+    }
+  }
+
+  // read congD from filename_wes_units
+  if (lineArgs.filename_wes_units_given){
+    ifstream file_wu(lineArgs.filename_wes_units_arg);
+    if (!file_wu.good()) {
+      cerr << "ERROR with wes units file"<<endl;
+      exit(-1);
+    }
+    getline(file_wu,line);  //skip data header
+    int I = 0;
+    while (getline(file_wu, line)) {
+      vector<string> dataline;
+      Tokenize(line.c_str(), dataline, ",", true);
+      if (dataline.size()!=2) {
+        cerr << "ERROR: shouldn't there be "<<2<<" chunks per line in b2wid?"<<endl;
+        cerr << "there are "<<dataline.size()<<" at I="<<I<<endl;
+        exit(-1);
+      }
+
+      for (int i = 0; i < dataline.size(); i++) {
+        if (dataline[i][0] == '\"') {
+          dataline[i] = dataline[i].substr(1, dataline[i].size() - 2);
+        }
+      }
+      int wid = atoi(dataline[0].c_str());
+      int district = atoi(dataline[1].c_str()) - 1;
+      pr[wid].original_district = district;
+      pr[wid].current_district = district;
+      I++;
+    }
+  }
  
   if (I<N || !myfile.eof() ){
     cerr << "ERROR: Line numbers don't match precinct count"<<endl;
@@ -785,8 +1175,10 @@ int main(int argc, char* argv[])
 
   int64_t * reps_histogram;
   reps_histogram = new int64_t[g_NUMDISTRICTS+1];
-  for (int i=0; i<=g_NUMDISTRICTS; i++)
+
+  for (int i=0; i<=g_NUMDISTRICTS; i++) {
     reps_histogram[i]=0;
+  }
 
   int ** adjM;                                       //precinct adjacency matrix
   rdpile<edge> edgeset(MAXEDGES,MAXEDGES*MAXDEGREE);                    //set of edges on district boundaries
@@ -904,18 +1296,32 @@ int main(int argc, char* argv[])
   DvotesB=new int[g_NUMDISTRICTS];      //running count of voteA-voteB in each district
   Ashare= new double[g_NUMDISTRICTS];
   Dpop=new int[g_NUMDISTRICTS];      //running count of voteA-voteB in each district
+
+  // running count of population in each district's intersection with each county.
+  std::vector<std::unordered_map<std::string, int>> districtCountyPopulations(g_NUMDISTRICTS);
+
   double * Dareas;
   double * Dperims;
+  int *DperimPop;
   Dareas=new double[g_NUMDISTRICTS];   //district areas
   Dperims=new double[g_NUMDISTRICTS];  //district perimeters
+  DperimPop = new int[g_NUMDISTRICTS];  //populations of district perimeters
   for (int k=0; k<g_NUMDISTRICTS; k++){
-    DvotesA[k]=DvotesB[k]=Dpop[k]=0;
+    DvotesA[k]=DvotesB[k]=Dpop[k]=DperimPop[k]=0;
     Dareas[k]=Dperims[k];
   }
 
+  std::random_device rd;
+  auto seed = rd();
+  std::cout << "Random seed for this run is " << seed << std::endl;
+  mt19937_64 gen(seed);
 
-  mt19937_64 gen(314159265358979);
-  
+  HistogramPopulator median_mean_hist = HistogramPopulator(steps, 0.0, 0.1);
+  HistogramPopulator eg_hist = HistogramPopulator(steps, 0, 0.8);
+  HistogramPopulator pp_hist = HistogramPopulator(steps, 0, 0.8);
+  HistogramPopulator seats_hist = HistogramPopulator(steps, 0, g_NUMDISTRICTS);
+  HistogramPopulator smoothed_seats_hist = HistogramPopulator(steps, 0, g_NUMDISTRICTS);
+
   //filling in first step...
   int revisitations;
   {
@@ -930,18 +1336,30 @@ int main(int argc, char* argv[])
   for (int i=0; i<N; i++){
     Dpop[pr[i].current_district]+=pr[i].population;
     totalpop+=pr[i].population;
+
+    if (use_counties)
+    {
+      districtCountyPopulations[pr[i].current_district][pr[i].county] += pr[i].population;
+    }
+
     DvotesA[pr[i].current_district]+= pr[i].voteA;
     DvotesB[pr[i].current_district]+= pr[i].voteB;
     Dareas[pr[i].current_district]+=  pr[i].area;
-    for (int j=0; j<pr[i].degree; j++){
-      if (pr[i].neighbors[j]>=0 && pr[i].current_district!=pr[pr[i].neighbors[j]].current_district){
-	Dperims[pr[i].current_district]+=pr[i].shared_perimeters[j];
-      }
-      else if (pr[i].neighbors[j]<0){
-	Dperims[pr[i].current_district]+=pr[i].shared_perimeters[j];
+    bool isCurrentPrecinctOnDistrictBoundary = false;
+    for (int j = 0; j < pr[i].degree; j++){
+      if (pr[i].neighbors[j] >= 0 && pr[i].current_district != pr[pr[i].neighbors[j]].current_district){
+        Dperims[pr[i].current_district] += pr[i].shared_perimeters[j];
+        isCurrentPrecinctOnDistrictBoundary = true;
+      } else if (pr[i].neighbors[j] < 0){
+        Dperims[pr[i].current_district] += pr[i].shared_perimeters[j];
+        isCurrentPrecinctOnDistrictBoundary = true;
       }
     }
+    if (isCurrentPrecinctOnDistrictBoundary){
+      DperimPop[pr[i].current_district] += pr[i].population;
+    }
   }
+
   double avgpop = (double) totalpop/g_NUMDISTRICTS;
   int Avotes=0;
   int Bvotes=0;
@@ -965,7 +1383,11 @@ int main(int argc, char* argv[])
   double initial_median_mean=median_mean(Ashare);
   double initial_efficiency_gap=efficiency_gap(DvotesA,DvotesB);
   int initial_seat_count=reps(Ashare);
-  
+  double initial_piecewise_seat_count=piecewise_reps(Ashare);
+  double initial_smoothed_seat_count=smoothed_piecewise_reps(Ashare);
+  double initial_popdev_penalty_score = 0;
+  double initial_discrete_compactness_penalty_score = 0;
+  double previous_districting_plan_penalty_score = 0;
 
 
   if (OutVariance)
@@ -974,8 +1396,11 @@ int main(int argc, char* argv[])
     cout << "initial median_mean is "<<initial_median_mean<<endl;
   if (OutEfficiencyGap)
     cout << "initial efficiency_gap is "<<initial_efficiency_gap<<endl;
-  if (OutSeats)
+  if (OutSeats) {
     cout << "initial seat count is "<<initial_seat_count<<endl;
+    cout << "initial piecewise seat count is "<<initial_piecewise_seat_count<<endl;
+    cout << "initial smoothed seat count is "<<initial_smoothed_seat_count<<endl;
+  }
   
   
   //(filling in first step)
@@ -991,7 +1416,20 @@ int main(int argc, char* argv[])
   reps_histogram[reps(Ashare)]+=revisitations;
   int64_t totalsteps=revisitations;
 
+  DistrictingPlanPenaltyScoreCalculator penaltyScoreCalculator(
+      1,       // splitWeight
+      .000001, // compactnessWeight
+      100,     // populationDeviationWeight,
+      totalpop,
+      pr, // precinct array
+      N,  // nPrecincts
+      g_NUMDISTRICTS);
 
+  if (penaltyScoreTest || metropolisHastingsTest){
+    initial_discrete_compactness_penalty_score = penaltyScoreCalculator.CalculateDiscreteCompactnessPenaltyScore(DperimPop, Dpop);
+    initial_popdev_penalty_score = penaltyScoreCalculator.CalculatePopulationDeviationPenaltyScore(Dpop);
+    previous_districting_plan_penalty_score = penaltyScoreCalculator.CalculateDistrictingPlanPenaltyScore(pr, N, DperimPop, Dpop, districtCountyPopulations);
+  }
 
   if (PerimTest){
     for (int i=0; i<N; i++)
@@ -1023,19 +1461,22 @@ int main(int argc, char* argv[])
       }
   }
 
- 
   int outputcount=0;
 
   //MAIN LOOP
   for (int64_t i=0; i<steps; i++){
+    float time_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                               std::chrono::system_clock::now()- start_time).count() / 60.0;
+    if (time_elapsed > target_time_min) break;
+
     uniform_int_distribution<> intdist(0,edgeset.count-1);
+    uniform_real_distribution<> uniformDistribution(0.0, 1.0);
     int rindex=intdist(gen);
     edge e=edgeset.access(rindex);    //we'll try adding vertex u(j) to u's district
     int Du=pr[e.u].current_district;
     int v=pr[e.u].neighbors[e.j];
     int Dv=pr[v].current_district;
 
-    
     int Dusegmentcount=0;
     int Dvsegmentcount=0;
     int precinct=pr[v].neighbors[0];
@@ -1045,15 +1486,11 @@ int main(int argc, char* argv[])
     int lastincycle=pr[precinct].neighbors[pointback];
     int lastprecinct=lastincycle;
     int edgeindex=pr[precinct].self[pointback] ;
-    
-      
+
     int newprecinct=-1;
     int testcount=0;
 
-      
     while ( ! ( newprecinct==pr[v].neighbors[0] && pr[lastprecinct].self[edgeindex]==pointback )  ){
-      
-
 
       assert(precinct==pr[lastprecinct].neighbors[edgeindex]);
       testcount++;
@@ -1061,9 +1498,6 @@ int main(int argc, char* argv[])
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
 
-
-
-      
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
       else if (lastD==Dv && newD!=Dv)
@@ -1081,8 +1515,6 @@ int main(int argc, char* argv[])
       precinct=newprecinct;
     }
 
-
-      
     assert(Dusegmentcount>0);
     if (Dvsegmentcount==0){
       cerr << "u is " <<e.u<<" and v is " <<v << endl;
@@ -1094,9 +1526,8 @@ int main(int argc, char* argv[])
       continue;
     }
 
-    
     //END CONNECTIVITY CHECK
-    chainstep(pr, edgeset, e, DvotesA, DvotesB, Ashare, Dpop, Dareas, Dperims);
+    chainstep(pr, edgeset, e, DvotesA, DvotesB, Ashare, Dpop, Dareas, Dperims, DperimPop, use_counties, districtCountyPopulations);
 
 
     bool LOOP=false;
@@ -1125,6 +1556,35 @@ int main(int argc, char* argv[])
       if (g_debuglevel>1)
 	cout << "LOOP! for compactness L2 violation"<<endl;
     }
+    else if (penaltyScoreTest){
+      auto new_discrete_compactness_penalty_score = penaltyScoreCalculator.CalculateDiscreteCompactnessPenaltyScore(DperimPop, Dpop);
+      auto new_popdev_penalty_score = penaltyScoreCalculator.CalculatePopulationDeviationPenaltyScore(Dpop);
+      if (initial_discrete_compactness_penalty_score < new_discrete_compactness_penalty_score ||
+          initial_popdev_penalty_score < new_popdev_penalty_score){
+        LOOP = true;
+        if (g_debuglevel > 1){
+  cout << "LOOP! for penalty score violation" << endl;
+        }
+      }
+    }
+    else if (metropolisHastingsTest){
+      double new_districting_plan_penalty_score = penaltyScoreCalculator.CalculateDistrictingPlanPenaltyScore(pr, N, DperimPop, Dpop, districtCountyPopulations);
+      // cout << "old penalty score: " << previous_districting_plan_penalty_score << " new penalty score: " << new_districting_plan_penalty_score << std::endl;
+      double gibbs_penalty_score_ratio = exp(-new_districting_plan_penalty_score) / exp(-previous_districting_plan_penalty_score);
+      // Reject this transformation with probability 1-penalty_score_ratio.
+      // Always accepts if penalty_score_ratio > 1 (which happens when our new state has lower penalty score than the old state).
+      // std::cout << "penalty_score_ratio " << gibbs_penalty_score_ratio << std::endl;
+      if (gibbs_penalty_score_ratio < uniformDistribution(gen)){
+        LOOP = true;
+        if (g_debuglevel > 1)
+        {
+          cout << "LOOP! for Metropolis-Hastings probability violation" << endl;
+        }
+      }
+      else{
+        previous_districting_plan_penalty_score = new_districting_plan_penalty_score;
+      }
+    }
 
     if (LOOP){
       edge rev_e; //edge to reverse the move
@@ -1137,7 +1597,7 @@ int main(int argc, char* argv[])
 	}
       }
       assert(foundone);
-      chainstep(pr, edgeset, rev_e, DvotesA, DvotesB, Ashare, Dpop, Dareas, Dperims);
+      chainstep(pr, edgeset, rev_e, DvotesA, DvotesB, Ashare, Dpop, Dareas, Dperims, DperimPop, use_counties, districtCountyPopulations);
     }
 
 
@@ -1151,31 +1611,55 @@ int main(int argc, char* argv[])
       else
 	variance_lessunusual+=revisitations;
     }
+    double median_mean_val;
+    double eg_val;
+    int seats;
+    double piecewise_seats;
+    double smoothed_seats;
+
     if (OutMedianMean){
-      if (median_mean(Ashare)>=initial_median_mean)
+      median_mean_val = median_mean(Ashare);
+      if (median_mean_val>=initial_median_mean)
 	median_mean_moreunusual+=revisitations;
       else
 	median_mean_lessunusual+=revisitations;
     }
+
     if (OutEfficiencyGap){
-      if (efficiency_gap(DvotesA,DvotesB)>=initial_efficiency_gap)
+      eg_val = efficiency_gap(DvotesA,DvotesB);
+      if (eg_val>=initial_efficiency_gap)
 	efficiency_gap_moreunusual+=revisitations;
       else
 	efficiency_gap_lessunusual+=revisitations;
     }
-    if (OutSeats){
 
-      if (reps(Ashare)<=initial_seat_count)
+    if (OutSeats){
+      seats = reps(Ashare);
+      piecewise_seats = piecewise_reps(Ashare);
+      smoothed_seats = smoothed_piecewise_reps(Ashare);
+      if (seats<=initial_seat_count)
 	seat_count_moreunusual+=revisitations;
       else
 	seat_count_lessunusual+=revisitations;
     }
+
     if (OutHistogram){
       reps_histogram[reps(Ashare)]+=revisitations;
+
+      if (OutMedianMean)
+        median_mean_hist.add_value(median_mean_val, revisitations);
+
+      if (OutEfficiencyGap)
+        eg_hist.add_value(eg_val, revisitations);
+
+      if (OutSeats){
+        seats_hist.add_value(piecewise_seats, revisitations);
+        smoothed_seats_hist.add_value(smoothed_seats, revisitations);
+      }
     }
 
     
-    if (!(i%period) || i==steps-1){
+    if (!(i%period) || i==steps-1 || i==1E5){
       
       outputcount++;
       if (lineArgs.stages_flag){
@@ -1207,6 +1691,37 @@ int main(int argc, char* argv[])
 	    cout <<100*(double) reps_histogram[j]/(totalsteps)<<"%"<<endl;
 	  }
 	}
+
+  // TODO: here's where histograms get saved
+  if (OutMedianMean){
+    if (i==1E5){
+      median_mean_hist.save_file("median_mean_hist_1E5.txt");
+    }
+    else {
+      median_mean_hist.save_file("median_mean_hist.txt");
+    }
+  }
+
+  if (OutEfficiencyGap) {
+    if (i==1E5){
+      eg_hist.save_file("eg_hist_1E5.txt");
+    }
+    else {
+      eg_hist.save_file("eg_hist.txt");
+    }
+  }
+
+  if (OutSeats){
+    if (i==1E5){
+      seats_hist.save_file("seats_hist_1E5.txt");
+      smoothed_seats_hist.save_file("smoothed_seats_hist_1E5.txt");
+    }
+    else {
+      seats_hist.save_file("seats_hist.txt");
+      smoothed_seats_hist.save_file("smoothed_seats_hist.txt");
+    }
+  }
+
 	cout << endl;
       }
       if (g_debuglevel>0){
@@ -1274,4 +1789,103 @@ int main(int argc, char* argv[])
     sprintf(precinctfilename,"%s",lineArgs.precinct_filename_arg);
     tofile(precinctfilename,pr,N,use_counties);
   }
+}
+
+// TESTCASES!
+
+bool penaltyScoreCalculatorTests()
+{
+  bool retval = true;
+
+  const int nPrecincts = 3;
+  const int nDistricts = 2;
+  // geometrically: | pr[0] --- pr[1] --- pr[2] |  0 and 2 on perimeter, 1 is interior.
+  //                |       D0         |  D1    |
+  //                | Adams  |     Jefferson    |
+  precinct pr[nPrecincts] = {precinct(2),
+                             precinct(3),
+                             precinct(2)};
+
+  // fill in the precincts.
+  pr[0].population = 10;
+  pr[1].population = 20;
+  pr[2].population = 35;
+
+  pr[0].current_district = 0;
+  pr[1].current_district = 0;
+  pr[2].current_district = 1;
+
+  pr[0].county = "adams";
+  pr[1].county = "Jefferson";
+  pr[2].county = "Jefferson";
+
+  auto calculator = DistrictingPlanPenaltyScoreCalculator(
+      1, 1, 1, pr[0].population + pr[1].population + pr[2].population,
+      pr, nPrecincts, 2);
+
+  int Dpop[nDistricts] = {0};
+  int DperimPop[nDistricts] = {0};
+
+  for (int i = 0; i < nPrecincts; ++i)
+  {
+    const auto &precinct = pr[i];
+    Dpop[precinct.current_district] += precinct.population;
+  }
+
+  DperimPop[0] = pr[0].population;
+  DperimPop[1] = pr[2].population;
+
+  const double expectedPopDev = .10975;
+  const double expectedDiscComp = 38.3333;
+  const double expectedSplit = 2.5208;
+  const double tolerance = .0001;
+
+  double actualDiscComp = calculator.CalculateDiscreteCompactnessPenaltyScore(DperimPop, Dpop);
+  double actualPopDev = calculator.CalculatePopulationDeviationPenaltyScore(Dpop);
+  double actualSplit = calculator.CalculateSplittingPenaltyScore(pr, 3, Dpop,
+                                                                 calculator.BuildDistrictCountyPopulationMatrix(pr, 3, Dpop));
+
+  if (std::abs(actualDiscComp - expectedDiscComp) > tolerance)
+  {
+    std::cout << "DiscreteCompactnessPenaltyScore Test FAILED!" << std::endl;
+    std::cout << "Expected: " << expectedDiscComp << std::endl;
+    std::cout << "Actual: " << actualDiscComp << std::endl;
+    retval = false;
+  }
+
+  if (std::abs(actualPopDev - expectedPopDev) > tolerance)
+  {
+    std::cout << "PopulationDeviationPenaltyScore Test FAILED!" << std::endl;
+    std::cout << "Expected: " << expectedPopDev << std::endl;
+    std::cout << "Actual: " << actualPopDev << std::endl;
+    retval = false;
+  }
+
+  if (std::abs(actualSplit - expectedSplit) > tolerance)
+  {
+    std::cout << "SplittingPenaltyScore Test FAILED!" << std::endl;
+    std::cout << "Expected: " << expectedSplit << std::endl;
+    std::cout << "Actual: " << actualSplit << std::endl;
+    retval = false;
+  }
+
+  return retval;
+}
+
+bool runtests()
+{
+  bool retval = true;
+
+  if (!penaltyScoreCalculatorTests())
+  {
+    std::cout << "PenaltyScoreCalculatorTests FAILED!" << std::endl;
+    retval = false;
+  }
+
+  if (retval)
+  {
+    std::cout << "All tests passed!" << std::endl;
+  }
+
+  return retval;
 }

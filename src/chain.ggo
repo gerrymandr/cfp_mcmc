@@ -5,8 +5,11 @@ usage "chain -n steps -f filename"
 
 section "Main"
 option  "steps"	n   "do 2^n steps" longlong
+option  "target_time"	t   "stop after this many minutes" float optional
 option "numdists" N "number of districts" int optional default="18"
 option "filename"  	 f   "name of district file" string typestr="string" typestr="filename" required
+option "filename_election_results" - "name of election results file" string typestr="string" typestr="filename" optional
+option "filename_wes_units" - "used for CongD" string typestr="string" typestr="filename" optional
 option "period" d "2^d is period for output" int default="22" optional
 option  "variance"   V   "report variance statistics"     flag off
 option  "median_mean" M "report median/mean test statistics" flag off
@@ -26,3 +29,6 @@ option "precinct-filename" o "precinct filename" string typestr="string" default
 option "svg-firstline" l "first rgb line of input.svg" int default="20" optional
 option "stages" O "output files for intermediate stages" flag off
 option "flip" R "flip A/B party correspondence" flag off
+option "use_penalty_scoring" - "Only allow moves to plans with smaller penalty scores than the original plan" optional
+option "use_metropolis" - "Weight move probabilities using the Metropolis-Hastings algorithm" optional
+option "test" T "Just execute this file's testcases and then exit." optional
