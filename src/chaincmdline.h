@@ -47,9 +47,9 @@ struct gengetopt_args_info
   #endif
   char * steps_orig;	/**< @brief do 2^n steps original value given at command line.  */
   const char *steps_help; /**< @brief do 2^n steps help description.  */
-  char * target_time_orig;
-  float target_time_arg;
-  const char *target_time_help; /**< @brief number of districts help description.  */
+  float target_time_arg;	/**< @brief stop after this many minutes.  */
+  char * target_time_orig;	/**< @brief stop after this many minutes original value given at command line.  */
+  const char *target_time_help; /**< @brief stop after this many minutes help description.  */
   int numdists_arg;	/**< @brief number of districts (default='18').  */
   char * numdists_orig;	/**< @brief number of districts original value given at command line.  */
   const char *numdists_help; /**< @brief number of districts help description.  */
@@ -113,12 +113,15 @@ struct gengetopt_args_info
   const char *stages_help; /**< @brief output files for intermediate stages help description.  */
   int flip_flag;	/**< @brief flip A/B party correspondence (default=off).  */
   const char *flip_help; /**< @brief flip A/B party correspondence help description.  */
+  const char *use_penalty_scoring_help; /**< @brief Only allow moves to plans with smaller penalty scores than the original plan help description.  */
+  const char *use_metropolis_help; /**< @brief Weight move probabilities using the Metropolis-Hastings algorithm help description.  */
+  const char *test_help; /**< @brief Just execute this file's testcases and then exit. help description.  */
   
   unsigned int help_given ;	/**< @brief Whether help was given.  */
   unsigned int full_help_given ;	/**< @brief Whether full-help was given.  */
   unsigned int version_given ;	/**< @brief Whether version was given.  */
   unsigned int steps_given ;	/**< @brief Whether steps was given.  */
-  unsigned int target_time_given ;	/**< @brief Whether steps was given.  */
+  unsigned int target_time_given ;	/**< @brief Whether target_time was given.  */
   unsigned int numdists_given ;	/**< @brief Whether numdists was given.  */
   unsigned int filename_given ;	/**< @brief Whether filename was given.  */
   unsigned int filename_election_results_given ;	/**< @brief Whether filename_election_results was given.  */
@@ -142,6 +145,9 @@ struct gengetopt_args_info
   unsigned int svg_firstline_given ;	/**< @brief Whether svg-firstline was given.  */
   unsigned int stages_given ;	/**< @brief Whether stages was given.  */
   unsigned int flip_given ;	/**< @brief Whether flip was given.  */
+  unsigned int use_penalty_scoring_given ;	/**< @brief Whether use_penalty_scoring was given.  */
+  unsigned int use_metropolis_given ;	/**< @brief Whether use_metropolis was given.  */
+  unsigned int test_given ;	/**< @brief Whether test was given.  */
 
   char **inputs ; /**< @brief unamed options (options without names) */
   unsigned inputs_num ; /**< @brief unamed options number */

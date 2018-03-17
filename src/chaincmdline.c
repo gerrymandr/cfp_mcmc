@@ -39,7 +39,7 @@ const char *gengetopt_args_info_full_help[] = {
   "      --version                 Print version and exit",
   "\nMain:",
   "  -n, --steps=LONGLONG          do 2^n steps",
-  "  -t, --target_time=FLOAT       set uppper bound on time limit (in minutes)",
+  "  -t, --target_time=FLOAT       stop after this many minutes",
   "  -N, --numdists=INT            number of districts  (default=`18')",
   "  -f, --filename=filename       name of district file",
   "      --filename_election_results=filename\n                                name of election results file",
@@ -63,6 +63,9 @@ const char *gengetopt_args_info_full_help[] = {
   "  -l, --svg-firstline=INT       first rgb line of input.svg  (default=`20')",
   "  -O, --stages                  output files for intermediate stages\n                                  (default=off)",
   "  -R, --flip                    flip A/B party correspondence  (default=off)",
+  "      --use_penalty_scoring     Only allow moves to plans with smaller penalty\n                                  scores than the original plan",
+  "      --use_metropolis          Weight move probabilities using the\n                                  Metropolis-Hastings algorithm",
+  "      --test                    Just execute this file's testcases and then\n                                  exit.",
     0
 };
 
@@ -83,7 +86,7 @@ init_help_array(void)
   gengetopt_args_info_help[11] = gengetopt_args_info_full_help[11];
   gengetopt_args_info_help[12] = gengetopt_args_info_full_help[12];
   gengetopt_args_info_help[13] = gengetopt_args_info_full_help[13];
-  gengetopt_args_info_help[14] = gengetopt_args_info_full_help[15];
+  gengetopt_args_info_help[14] = gengetopt_args_info_full_help[14];
   gengetopt_args_info_help[15] = gengetopt_args_info_full_help[16];
   gengetopt_args_info_help[16] = gengetopt_args_info_full_help[17];
   gengetopt_args_info_help[17] = gengetopt_args_info_full_help[18];
@@ -97,11 +100,14 @@ init_help_array(void)
   gengetopt_args_info_help[25] = gengetopt_args_info_full_help[26];
   gengetopt_args_info_help[26] = gengetopt_args_info_full_help[27];
   gengetopt_args_info_help[27] = gengetopt_args_info_full_help[28];
-  gengetopt_args_info_help[28] = 0;
-
+  gengetopt_args_info_help[28] = gengetopt_args_info_full_help[29];
+  gengetopt_args_info_help[29] = gengetopt_args_info_full_help[30];
+  gengetopt_args_info_help[30] = gengetopt_args_info_full_help[31];
+  gengetopt_args_info_help[31] = 0; 
+  
 }
 
-const char *gengetopt_args_info_help[29];
+const char *gengetopt_args_info_help[32];
 
 typedef enum {ARG_NO
   , ARG_FLAG
@@ -157,7 +163,9 @@ void clear_given (struct gengetopt_args_info *args_info)
   args_info->svg_firstline_given = 0 ;
   args_info->stages_given = 0 ;
   args_info->flip_given = 0 ;
-  args_info->target_time_given = 0 ;
+  args_info->use_penalty_scoring_given = 0 ;
+  args_info->use_metropolis_given = 0 ;
+  args_info->test_given = 0 ;
 }
 
 static
@@ -238,6 +246,9 @@ void init_args_info(struct gengetopt_args_info *args_info)
   args_info->svg_firstline_help = gengetopt_args_info_full_help[26] ;
   args_info->stages_help = gengetopt_args_info_full_help[27] ;
   args_info->flip_help = gengetopt_args_info_full_help[28] ;
+  args_info->use_penalty_scoring_help = gengetopt_args_info_full_help[29] ;
+  args_info->use_metropolis_help = gengetopt_args_info_full_help[30] ;
+  args_info->test_help = gengetopt_args_info_full_help[31] ;
   
 }
 
@@ -506,6 +517,12 @@ cmdline_parser_dump(FILE *outfile, struct gengetopt_args_info *args_info)
     write_into_file(outfile, "stages", 0, 0 );
   if (args_info->flip_given)
     write_into_file(outfile, "flip", 0, 0 );
+  if (args_info->use_penalty_scoring_given)
+    write_into_file(outfile, "use_penalty_scoring", 0, 0 );
+  if (args_info->use_metropolis_given)
+    write_into_file(outfile, "use_metropolis", 0, 0 );
+  if (args_info->test_given)
+    write_into_file(outfile, "test", 0, 0 );
   
 
   i = EXIT_SUCCESS;
@@ -1121,10 +1138,13 @@ cmdline_parser_internal (
         { "svg-firstline",	1, NULL, 'l' },
         { "stages",	0, NULL, 'O' },
         { "flip",	0, NULL, 'R' },
+        { "use_penalty_scoring",	0, NULL, 0 },
+        { "use_metropolis",	0, NULL, 0 },
+        { "test",	0, NULL, 0 },
         { 0,  0, 0, 0 }
       };
 
-      c = getopt_long (argc, argv, "hn:N:f:d:VMESHF:Cp:P:c:1:2:I:s:o:l:OR", long_options, &option_index);
+      c = getopt_long (argc, argv, "hn:t:N:f:d:VMESHF:Cp:P:c:1:2:I:s:o:l:OR", long_options, &option_index);
 
       if (c == -1) break;	/* Exit from `while (1)' loop.  */
 
@@ -1147,21 +1167,18 @@ cmdline_parser_internal (
             goto failure;
         
           break;
-
-
-        case 't':	/* stop after this many minutes  */
-
-
-          if (update_arg( (void *)&(args_info->target_time_arg),
-                          &(args_info->target_time_orig), &(args_info->target_time_given),
-                          &(local_args_info.target_time_given), optarg, 0, 0, ARG_FLOAT,
-                          check_ambiguity, override, 0, 0,
-                          "target_time", 't',
-                          additional_error))
+        case 't':	/* stop after this many minutes.  */
+        
+        
+          if (update_arg( (void *)&(args_info->target_time_arg), 
+               &(args_info->target_time_orig), &(args_info->target_time_given),
+              &(local_args_info.target_time_given), optarg, 0, 0, ARG_FLOAT,
+              check_ambiguity, override, 0, 0,
+              "target_time", 't',
+              additional_error))
             goto failure;
-
+        
           break;
-
         case 'N':	/* number of districts.  */
         
         
@@ -1443,6 +1460,48 @@ cmdline_parser_internal (
                 &(local_args_info.filename_wes_units_given), optarg, 0, 0, ARG_STRING,
                 check_ambiguity, override, 0, 0,
                 "filename_wes_units", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Only allow moves to plans with smaller penalty scores than the original plan.  */
+          else if (strcmp (long_options[option_index].name, "use_penalty_scoring") == 0)
+          {
+          
+          
+            if (update_arg( 0 , 
+                 0 , &(args_info->use_penalty_scoring_given),
+                &(local_args_info.use_penalty_scoring_given), optarg, 0, 0, ARG_NO,
+                check_ambiguity, override, 0, 0,
+                "use_penalty_scoring", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Weight move probabilities using the Metropolis-Hastings algorithm.  */
+          else if (strcmp (long_options[option_index].name, "use_metropolis") == 0)
+          {
+          
+          
+            if (update_arg( 0 , 
+                 0 , &(args_info->use_metropolis_given),
+                &(local_args_info.use_metropolis_given), optarg, 0, 0, ARG_NO,
+                check_ambiguity, override, 0, 0,
+                "use_metropolis", '-',
+                additional_error))
+              goto failure;
+          
+          }
+          /* Just execute this file's testcases and then exit..  */
+          else if (strcmp (long_options[option_index].name, "test") == 0)
+          {
+          
+          
+            if (update_arg( 0 , 
+                 0 , &(args_info->test_given),
+                &(local_args_info.test_given), optarg, 0, 0, ARG_NO,
+                check_ambiguity, override, 0, 0,
+                "test", '-',
                 additional_error))
               goto failure;
           
