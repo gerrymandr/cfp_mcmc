@@ -1,0 +1,26 @@
+package:
+  name: districting_mcmc
+  version: 1.0
+
+source:
+  - path: ../
+  - url: http://mrzv.org/tmp/chain-x86_64.exe  # [win64]
+  - url: http://mrzv.org/tmp/chain-i686.exe    # [win32]
+    fn: chain.exe                              # [win]
+
+# not building on win - rebundling mingw-compiled exe's
+# build:
+#   skip: True   # [win and vc<14]
+
+requirements:
+  build:
+    - {{ compiler('c') }}     # [unix]
+    - {{ compiler('cxx') }}   # [unix]
+    - cmake                   # [unix]
+  run:
+    - python
+    - matplotlib
+
+test:
+  commands:
+    - chain -h
