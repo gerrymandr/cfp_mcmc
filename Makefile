@@ -8,10 +8,6 @@ EULERBIN=~/eulerbin
 
 SRCDIR=./src
 
-#### Compiler and tool definitions shared by all build targets #####
-CCC = g++
-CXX = g++
-
 # Flags
 CFLAGS          := 
 #CXXFLAGS        :=  -march=native -O3

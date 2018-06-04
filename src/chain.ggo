@@ -32,3 +32,4 @@ option "flip" R "flip A/B party correspondence" flag off
 option "use_penalty_scoring" - "Only allow moves to plans with smaller penalty scores than the original plan" optional
 option "use_metropolis" - "Weight move probabilities using the Metropolis-Hastings algorithm" optional
 option "test" - "Just execute this file's testcases and then exit." optional
+option "old_style_precincts_file" - "Expect that election results are in precincts file (default no)" optional
