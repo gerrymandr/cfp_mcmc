@@ -1038,11 +1038,6 @@ int main(int argc, char* argv[])
     metropolisHastingsTest = true;
   }
 
-  bool old_style_precincts_file = false;
-  if (lineArgs.old_style_precincts_file_given){
-    old_style_precincts_file=true;
-  }
-
   g_debuglevel=0;
 
   int N; //num precincts
@@ -1098,15 +1093,13 @@ int main(int argc, char* argv[])
  
   int I=0;
   int sum=0;
-  int chunks = 5;
   //  old style files included election results in them.  Moon wants to not include them.
-  if (old_style_precincts_file)
-    chunks += 2;
   while (getline(myfile,line) && I<N){
     vector<string> dataline;
     Tokenize(line.c_str(), dataline, "\t", true);
-    if (dataline.size()!=chunks+use_counties){
-      cerr << "ERROR: shouldn't there be "<<chunks+use_counties<<" chunks per line?"<<endl;
+    bool old_style_precincts_file = (dataline.size() == 9 + use_counties);
+    if  (!(dataline.size()==5+use_counties || dataline.size()==9+use_counties)){
+      cerr << "ERROR: shouldn't there be "<<5+use_counties<<" or " << 9+use_counties <<" chunks per line?"<<endl;
       cerr << "there are "<<dataline.size()<<" at I="<<I<<endl;
       exit(-1);
     }
@@ -1512,7 +1505,6 @@ int main(int argc, char* argv[])
     uniform_real_distribution<> uniformDistribution(0.0, 1.0);
     int rindex=intdist(gen);
     edge e=edgeset.access(rindex);    //we'll try adding vertex u(j) to u's district
-    cout << "edge is " << e.u << ", " << pr[e.u].neighbors[e.j] << endl;
     int Du=pr[e.u].current_district;
     int v=pr[e.u].neighbors[e.j];
     int Dv=pr[v].current_district;
@@ -1538,9 +1530,6 @@ int main(int argc, char* argv[])
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
 
-      cout << "lastD" << lastD << ", " << Du << endl;
-      cout << "newD" << newD << ", " << Du << endl;
-
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
       else if (lastD==Dv && newD!=Dv)
@@ -1549,8 +1538,8 @@ int main(int argc, char* argv[])
       edgeindex=(pr[lastprecinct].self[edgeindex]-1+pr[precinct].degree) % pr[precinct].degree;
       newprecinct=pr[precinct].neighbors[edgeindex];
       if (newprecinct==v){ //if I'm a neighbor of v, skip v for next step of cycle
-	edgeindex=(edgeindex-1+pr[precinct].degree) % pr[precinct].degree;
-	newprecinct=pr[precinct].neighbors[edgeindex];
+        edgeindex=(edgeindex-1+pr[precinct].degree) % pr[precinct].degree;
+        newprecinct=pr[precinct].neighbors[edgeindex];
       }
 
 
@@ -1558,10 +1547,11 @@ int main(int argc, char* argv[])
       precinct=newprecinct;
     }
 
-    assert(Dusegmentcount>0);
     if (Dvsegmentcount==0){
-      cerr << "u is " <<e.u<<" and v is " <<v << endl;
+      cerr << "Error: Empty Du segment count.  Check neighbor input data." << endl;
+      cerr << "u (precinct id) is " <<e.u<<" and v (neighbor) is " <<v << endl;
     }
+    assert(Dusegmentcount>0);
     assert(Dvsegmentcount>0);
 
     if (Dusegmentcount>1 || Dvsegmentcount>1){
