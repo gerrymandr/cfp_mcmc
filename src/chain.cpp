@@ -401,7 +401,7 @@ bool validpop(int pop, double avgpop, double popthresh){
 
 
 double dcompact(double Area, double Perim){  //inverse of Polsby-Popper: bigger is worse
-  return (pow(Perim,2)/(Area*4*M_PI));
+  return (pow(Perim,2)/(Area*4*3.14159265358979323846264338327950288));
 }
 
 double compactsum(double * Area, double * Perim, int arraylength){
