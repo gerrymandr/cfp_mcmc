@@ -1109,15 +1109,18 @@ int main(int argc, char* argv[])
       exit(-1);
     }
     pr[I]=precinct(dataline,lineArgs.flip_flag,use_counties, old_style_precincts_file);
-    //cout << I << ":" << endl;
-    //for (int i = 0; i < pr[I].degree; ++i)
-    //    cout << pr[I].neighbors[i] << ",";
-    //cout << endl;
+    if (g_debuglevel>1) {
+      cout << I << ":" << endl;
+      for (int i = 0; i < pr[I].degree; ++i)
+          cout << pr[I].neighbors[i] << ",";
+      cout << endl;
+    }
 
     sum+=pr[I].degree;
     I++;
   }
-  //cout << "Sum of degrees: " << sum << endl;
+  if (g_debuglevel>1)
+    cout << "Sum of degrees: " << sum << endl;
 
   // TODO(bojanserafimov): tidy up later
   // TODO(bojanserafimov): test this.
@@ -1137,6 +1140,9 @@ int main(int argc, char* argv[])
         cerr << "ERROR: election results file is longer than it should be";
         exit(-1);
       }
+      // If we have a header line (defined as something starting with a #), ignore it
+      if (line.find("#") != -1)
+        continue;
       vector<string> dataline;
       Tokenize(line.c_str(), dataline, ", ", true);
       if (dataline.size()!=3) {
@@ -1172,10 +1178,12 @@ int main(int argc, char* argv[])
       cerr << "ERROR with wes units file"<<endl;
       exit(-1);
     }
-    //getline(file_wu,line);  //skip data header
     int I = 0;
     while (getline(file_wu, line)) {
       //cout << line << endl;
+      // If we have a header line (defined as something starting with a #), ignore it
+      if (line.find("#") != -1)
+        continue;
       vector<string> dataline;
       Tokenize(line.c_str(), dataline, ",", true);
       if (dataline.size()!=2) {
@@ -1195,13 +1203,13 @@ int main(int argc, char* argv[])
       pr[wid].original_district = district;
       pr[wid].current_district = district;
 
-      //cout << wid << " " << district << endl;
+      if (g_debuglevel>1)
+        cout << wid << " " << district << endl;
 
       I++;
     }
   }
-  //exit(0);
- 
+
   if (I<N || !myfile.eof() ){
     cerr << "ERROR: Line numbers don't match precinct count"<<endl;
     exit(-1);
@@ -1289,7 +1297,6 @@ int main(int argc, char* argv[])
         BFSqueue.push(i);
         pr[i].giant=true;
         count++; localcount++;
-        // Why do we break here?
         break;
       }
     }
@@ -1540,7 +1547,8 @@ int main(int argc, char* argv[])
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
       
-      //cout << precinct << " " << lastprecinct << " " << lastD << " " << newD << endl;
+      if (g_debuglevel>1)
+        cout << precinct << " " << lastprecinct << " " << lastD << " " << newD << endl;
 
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
