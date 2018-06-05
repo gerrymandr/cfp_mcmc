@@ -106,7 +106,7 @@ public:
     giant=false;
   }
 
-  precinct(vector<string> dataline, bool flip, bool use_counties){
+  precinct(vector<string> dataline, bool flip, bool use_counties, bool old_cols){
     initialized=true;
     selfinitialized=false;
     vector<string> neighbors_string;
@@ -116,7 +116,9 @@ public:
     degree=neighbors_string.size();
     if (shared_perimeters_string.size()!=degree){
       cerr << "ERROR: perimeter list differs in length from neighbor list?" << endl;
-      cerr << "neighbor list was: "<< dataline[1] << endl; 
+      cerr << "neighbor list was: "<< dataline[1] << endl;
+      cerr << "perimeter list was: "<< dataline[2] << endl;
+      cerr << "record id was: "<< dataline[0] << endl;
       exit(-1);
     }
     neighbors=new int[degree];
@@ -126,24 +128,34 @@ public:
       neighbors[i]=atoi(neighbors_string[i].c_str()); //subtract one because of indexing from 0
       shared_perimeters[i]=atof(shared_perimeters_string[i].c_str());
     }
-    area=atof(dataline[4].c_str());
-    population=atoi(dataline[5].c_str());
-    if (flip){
-      voteA=atoi(dataline[7].c_str());
-      voteB=atoi(dataline[6].c_str());
-    }
-    else{
-      voteA=atoi(dataline[6].c_str());
-      voteB=atoi(dataline[7].c_str());
-    }
+    if (old_cols) {
+      area=atof(dataline[4].c_str());
+      population=atoi(dataline[5].c_str());
+      if (flip){
+        voteA=atoi(dataline[7].c_str());
+        voteB=atoi(dataline[6].c_str());
+      }
+      else{
+        voteA=atoi(dataline[6].c_str());
+        voteB=atoi(dataline[7].c_str());
+      }
     
-    original_district=atoi(dataline[8].c_str())-1; //subtract one because of indexing from 0
-    current_district=original_district;
-    if (use_counties)
-      county=dataline[9];
+      original_district=atoi(dataline[8].c_str())-1; //subtract one because of indexing from 0
+      current_district=original_district;
+      if (use_counties)
+        county=dataline[9];
+    }
+    else {
+      area=atof(dataline[3].c_str());
+      population=atoi(dataline[4].c_str());
+
+      if (use_counties)
+        county=dataline[5];
+    }
     frozen=false;
     giant=false;
-    if (current_district>=g_NUMDISTRICTS){
+    if (old_cols && current_district>=g_NUMDISTRICTS){
+      cerr << current_district << " " << g_NUMDISTRICTS << endl;
       cerr << "ERROR: district number out of range"<<endl;
       exit(-1);
     }
@@ -1010,11 +1022,11 @@ int main(int argc, char* argv[])
     popperthresh=lineArgs.polsby_popper_arg; //actually inverse of Polsby-Popper value
   }
   if (lineArgs.L1_compactness_given){
-    L1Test=true;     
+    L1Test=true;
     L1thresh=lineArgs.L1_compactness_arg;
   }
   if (lineArgs.L2_compactness_given){
-    L2Test=true;     
+    L2Test=true;
     L2thresh=lineArgs.L2_compactness_arg;
   }
   if (lineArgs.target_time_given){
@@ -1042,11 +1054,26 @@ int main(int argc, char* argv[])
   bool use_counties=false;
   string old_header ("precinctlistv01");
   string county_header ("precinctlistv02");
-  getline (myfile,line); //file header
+  getline(myfile,line); //file header
+
+  // trim trailing spaces
+  size_t endpos = line.find_last_not_of(" \t");
+  size_t startpos = line.find_first_not_of(" \t");
+  if( std::string::npos != endpos )
+    {
+      line = line.substr( 0, endpos+1 );
+      line = line.substr( startpos );
+    }
+  else {
+    line.erase(std::remove(std::begin(line), std::end(line), ' '), std::end(line));
+  }
+
   if (old_header.compare(line)){
     if (county_header.compare(line)){
       cerr << "ERROR: incorrect file header at pos " << county_header.compare(line) << endl;
-    exit(-1);
+      cerr << "File was " << lineArgs.filename_arg << endl;
+      cerr << "content was \"" << line << "\"" << endl;
+      exit(-1);
     }
     use_counties=true;
   }
@@ -1056,7 +1083,7 @@ int main(int argc, char* argv[])
   }
   getline(myfile,line); //#precints
   N=atoi(line.c_str());
-  pr=new precinct[N+1];  
+  pr=new precinct[N+1];
 
   
   cout << "We have "<<N<<" precincts."<<endl;
@@ -1067,11 +1094,13 @@ int main(int argc, char* argv[])
  
   int I=0;
   int sum=0;
+  //  old style files included election results in them.  Moon wants to not include them.
   while (getline(myfile,line) && I<N){
     vector<string> dataline;
     Tokenize(line.c_str(), dataline, "\t", true);
-    if (dataline.size()!=9+use_counties){
-      cerr << "ERROR: shouldn't there be "<<9+use_counties<<" chunks per line?"<<endl;
+    bool old_style_precincts_file = (dataline.size() == 9 + use_counties);
+    if  (!(dataline.size()==5+use_counties || dataline.size()==9+use_counties)){
+      cerr << "ERROR: shouldn't there be "<<5+use_counties<<" or " << 9+use_counties <<" chunks per line?"<<endl;
       cerr << "there are "<<dataline.size()<<" at I="<<I<<endl;
       exit(-1);
     }
@@ -1079,11 +1108,19 @@ int main(int argc, char* argv[])
       cerr << "ERROR: line numbers don't match"<<endl;
       exit(-1);
     }
-    pr[I]=precinct(dataline,lineArgs.flip_flag,use_counties);
+    pr[I]=precinct(dataline,lineArgs.flip_flag,use_counties, old_style_precincts_file);
+    if (g_debuglevel>1) {
+      cout << I << ":" << endl;
+      for (int i = 0; i < pr[I].degree; ++i)
+          cout << pr[I].neighbors[i] << ",";
+      cout << endl;
+    }
 
     sum+=pr[I].degree;
     I++;
   }
+  if (g_debuglevel>1)
+    cout << "Sum of degrees: " << sum << endl;
 
   // TODO(bojanserafimov): tidy up later
   // TODO(bojanserafimov): test this.
@@ -1103,6 +1140,9 @@ int main(int argc, char* argv[])
         cerr << "ERROR: election results file is longer than it should be";
         exit(-1);
       }
+      // If we have a header line (defined as something starting with a #), ignore it
+      if (line.find("#") != -1)
+        continue;
       vector<string> dataline;
       Tokenize(line.c_str(), dataline, ", ", true);
       if (dataline.size()!=3) {
@@ -1131,15 +1171,19 @@ int main(int argc, char* argv[])
   }
 
   // read congD from filename_wes_units
+  //     This is the district assignment, aka equivalency file, aka districting plan
   if (lineArgs.filename_wes_units_given){
     ifstream file_wu(lineArgs.filename_wes_units_arg);
     if (!file_wu.good()) {
       cerr << "ERROR with wes units file"<<endl;
       exit(-1);
     }
-    getline(file_wu,line);  //skip data header
     int I = 0;
     while (getline(file_wu, line)) {
+      //cout << line << endl;
+      // If we have a header line (defined as something starting with a #), ignore it
+      if (line.find("#") != -1)
+        continue;
       vector<string> dataline;
       Tokenize(line.c_str(), dataline, ",", true);
       if (dataline.size()!=2) {
@@ -1154,13 +1198,18 @@ int main(int argc, char* argv[])
         }
       }
       int wid = atoi(dataline[0].c_str());
+      // adjust to zero-based index
       int district = atoi(dataline[1].c_str()) - 1;
       pr[wid].original_district = district;
       pr[wid].current_district = district;
+
+      if (g_debuglevel>1)
+        cout << wid << " " << district << endl;
+
       I++;
     }
   }
- 
+
   if (I<N || !myfile.eof() ){
     cerr << "ERROR: Line numbers don't match precinct count"<<endl;
     exit(-1);
@@ -1245,10 +1294,10 @@ int main(int argc, char* argv[])
     queue <int> BFSqueue;
     for (int i=0; i<N; i++){
       if (pr[i].current_district==k){
-	BFSqueue.push(i);
-	pr[i].giant=true;
-	count++; localcount++;
-	break;
+        BFSqueue.push(i);
+        pr[i].giant=true;
+        count++; localcount++;
+        break;
       }
     }
     while (!BFSqueue.empty()){
@@ -1271,6 +1320,7 @@ int main(int argc, char* argv[])
     if (pr[i].giant==false){
       passed=false;
       cerr << "ERROR: Precinct "<<i<< " is not in its giant!"<<endl;
+      cerr << "It thinks it should be in "<<pr[i].current_district << endl;
     }
   }
 
@@ -1281,7 +1331,6 @@ int main(int argc, char* argv[])
   }
   else
     exit(-1);
-
 
   int64_t steps=pow(2,lineArgs.steps_arg);
   int64_t period=pow(2,lineArgs.period_arg);
@@ -1497,6 +1546,9 @@ int main(int argc, char* argv[])
       assert(testcount<100);
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
+      
+      if (g_debuglevel>1)
+        cout << precinct << " " << lastprecinct << " " << lastD << " " << newD << endl;
 
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
@@ -1506,19 +1558,21 @@ int main(int argc, char* argv[])
       edgeindex=(pr[lastprecinct].self[edgeindex]-1+pr[precinct].degree) % pr[precinct].degree;
       newprecinct=pr[precinct].neighbors[edgeindex];
       if (newprecinct==v){ //if I'm a neighbor of v, skip v for next step of cycle
-	edgeindex=(edgeindex-1+pr[precinct].degree) % pr[precinct].degree;
-	newprecinct=pr[precinct].neighbors[edgeindex];
+        edgeindex=(edgeindex-1+pr[precinct].degree) % pr[precinct].degree;
+        newprecinct=pr[precinct].neighbors[edgeindex];
       }
 
 
       lastprecinct=precinct;
       precinct=newprecinct;
     }
+    //cout << "------" << endl;
 
-    assert(Dusegmentcount>0);
-    if (Dvsegmentcount==0){
-      cerr << "u is " <<e.u<<" and v is " <<v << endl;
+    if (Dusegmentcount == 0 || Dvsegmentcount==0){
+      cerr << "Error: Empty Du segment count.  Check neighbor input data." << endl;
+      cerr << "u (precinct id) is " <<e.u<<" and v (neighbor) is " <<v << endl;
     }
+    assert(Dusegmentcount>0);
     assert(Dvsegmentcount>0);
 
     if (Dusegmentcount>1 || Dvsegmentcount>1){
