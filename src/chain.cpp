@@ -1109,15 +1109,15 @@ int main(int argc, char* argv[])
       exit(-1);
     }
     pr[I]=precinct(dataline,lineArgs.flip_flag,use_counties, old_style_precincts_file);
-    cout << I << ":" << endl;
-    for (int i = 0; i < pr[I].degree; ++i)
-        cout << pr[I].neighbors[i] << ",";
-    cout << endl;
+    //cout << I << ":" << endl;
+    //for (int i = 0; i < pr[I].degree; ++i)
+    //    cout << pr[I].neighbors[i] << ",";
+    //cout << endl;
 
     sum+=pr[I].degree;
     I++;
   }
-  cout << "Sum of degrees: " << sum << endl;
+  //cout << "Sum of degrees: " << sum << endl;
 
   // TODO(bojanserafimov): tidy up later
   // TODO(bojanserafimov): test this.
@@ -1172,10 +1172,10 @@ int main(int argc, char* argv[])
       cerr << "ERROR with wes units file"<<endl;
       exit(-1);
     }
-    getline(file_wu,line);  //skip data header
+    //getline(file_wu,line);  //skip data header
     int I = 0;
     while (getline(file_wu, line)) {
-      cout << line << endl;
+      //cout << line << endl;
       vector<string> dataline;
       Tokenize(line.c_str(), dataline, ",", true);
       if (dataline.size()!=2) {
@@ -1195,7 +1195,7 @@ int main(int argc, char* argv[])
       pr[wid].original_district = district;
       pr[wid].current_district = district;
 
-      cout << wid << " " << district << endl;
+      //cout << wid << " " << district << endl;
 
       I++;
     }
@@ -1293,7 +1293,6 @@ int main(int argc, char* argv[])
         break;
       }
     }
-    cout << k << " " << count << endl;
     while (!BFSqueue.empty()){
       int myindex=BFSqueue.front();
       BFSqueue.pop();
@@ -1541,7 +1540,7 @@ int main(int argc, char* argv[])
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
       
-      cout << precinct << " " << lastprecinct << " " << lastD << " " << newD << endl;
+      //cout << precinct << " " << lastprecinct << " " << lastD << " " << newD << endl;
 
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
@@ -1559,7 +1558,7 @@ int main(int argc, char* argv[])
       lastprecinct=precinct;
       precinct=newprecinct;
     }
-    cout << "------" << endl;
+    //cout << "------" << endl;
 
     if (Dusegmentcount == 0 || Dvsegmentcount==0){
       cerr << "Error: Empty Du segment count.  Check neighbor input data." << endl;
