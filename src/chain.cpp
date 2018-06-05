@@ -154,7 +154,8 @@ public:
     }
     frozen=false;
     giant=false;
-    if (current_district>=g_NUMDISTRICTS){
+    if (old_cols && current_district>=g_NUMDISTRICTS){
+      cerr << current_district << " " << g_NUMDISTRICTS << endl;
       cerr << "ERROR: district number out of range"<<endl;
       exit(-1);
     }
@@ -1108,10 +1109,15 @@ int main(int argc, char* argv[])
       exit(-1);
     }
     pr[I]=precinct(dataline,lineArgs.flip_flag,use_counties, old_style_precincts_file);
+    cout << I << ":" << endl;
+    for (int i = 0; i < pr[I].degree; ++i)
+        cout << pr[I].neighbors[i] << ",";
+    cout << endl;
 
     sum+=pr[I].degree;
     I++;
   }
+  cout << "Sum of degrees: " << sum << endl;
 
   // TODO(bojanserafimov): tidy up later
   // TODO(bojanserafimov): test this.
@@ -1169,6 +1175,7 @@ int main(int argc, char* argv[])
     getline(file_wu,line);  //skip data header
     int I = 0;
     while (getline(file_wu, line)) {
+      cout << line << endl;
       vector<string> dataline;
       Tokenize(line.c_str(), dataline, ",", true);
       if (dataline.size()!=2) {
@@ -1187,9 +1194,13 @@ int main(int argc, char* argv[])
       int district = atoi(dataline[1].c_str()) - 1;
       pr[wid].original_district = district;
       pr[wid].current_district = district;
+
+      cout << wid << " " << district << endl;
+
       I++;
     }
   }
+  //exit(0);
  
   if (I<N || !myfile.eof() ){
     cerr << "ERROR: Line numbers don't match precinct count"<<endl;
@@ -1279,9 +1290,10 @@ int main(int argc, char* argv[])
         pr[i].giant=true;
         count++; localcount++;
         // Why do we break here?
-        //     break;
+        break;
       }
     }
+    cout << k << " " << count << endl;
     while (!BFSqueue.empty()){
       int myindex=BFSqueue.front();
       BFSqueue.pop();
@@ -1313,7 +1325,6 @@ int main(int argc, char* argv[])
   }
   else
     exit(-1);
-
 
   int64_t steps=pow(2,lineArgs.steps_arg);
   int64_t period=pow(2,lineArgs.period_arg);
@@ -1529,6 +1540,8 @@ int main(int argc, char* argv[])
       assert(testcount<100);
       int lastD=pr[lastprecinct].current_district;
       int newD=pr[precinct].current_district;
+      
+      cout << precinct << " " << lastprecinct << " " << lastD << " " << newD << endl;
 
       if (lastD==Du && newD!=Du)
 	Dusegmentcount++;
@@ -1546,8 +1559,9 @@ int main(int argc, char* argv[])
       lastprecinct=precinct;
       precinct=newprecinct;
     }
+    cout << "------" << endl;
 
-    if (Dvsegmentcount==0){
+    if (Dusegmentcount == 0 || Dvsegmentcount==0){
       cerr << "Error: Empty Du segment count.  Check neighbor input data." << endl;
       cerr << "u (precinct id) is " <<e.u<<" and v (neighbor) is " <<v << endl;
     }
